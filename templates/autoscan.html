@@ -1,0 +1,650 @@
+{% extends "base.html" %}
+{% block title %}Auto Scan – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-crosshairs" style="color:var(--accent)"></i> Auto Scan{% endblock %}
+
+{% block content %}
+<div class="alert alert-warning">
+  <i class="fas fa-exclamation-triangle"></i>
+  <div><strong>Authorized Use Only.</strong> Enter a target you own or have explicit written permission to test. This will run all reconnaissance, scanning, and vulnerability detection tools automatically.</div>
+</div>
+
+<!-- Target Input -->
+<div class="card" id="input-card">
+  <div class="card-header">
+    <div class="card-title"><i class="fas fa-crosshairs"></i> Target</div>
+  </div>
+  <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+    <div class="form-group" style="flex:1;min-width:260px;margin:0">
+      <label class="form-label">IP Address or Domain Name</label>
+      <input type="text" id="scan-target" class="form-control" placeholder="192.168.1.1  or  example.com" style="font-size:1em;padding:12px 16px" autofocus>
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Port Range</label>
+      <select id="scan-ports" class="form-control">
+        <option value="1-1024">Top 1024</option>
+        <option value="21,22,23,25,53,80,110,143,443,445,3306,3389,5432,6379,8080,8443,8888,9200,27017">Common Services</option>
+        <option value="1-65535">Full (slow)</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label">Scan Depth</label>
+      <select id="scan-depth" class="form-control">
+        <option value="standard">Standard</option>
+        <option value="deep">Deep (slower)</option>
+        <option value="quick">Quick Recon</option>
+      </select>
+    </div>
+    <button class="btn btn-primary" id="start-btn" onclick="startScan()" style="padding:12px 28px;font-size:1em">
+      <i class="fas fa-play"></i> Start Full Scan
+    </button>
+    <button class="btn btn-secondary" id="stop-btn" onclick="stopScan()" style="padding:12px 20px;display:none">
+      <i class="fas fa-stop"></i> Stop
+    </button>
+  </div>
+</div>
+
+<!-- Progress Panel -->
+<div id="progress-panel" style="display:none">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-tasks"></i> Scan Progress</div>
+      <div id="overall-status" style="font-size:.85em;color:var(--muted)">Initializing…</div>
+    </div>
+
+    <!-- Overall progress bar -->
+    <div style="background:var(--border2);border-radius:4px;height:8px;margin-bottom:20px;overflow:hidden">
+      <div id="overall-bar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--accent2),var(--accent),var(--gold-light));transition:width .4s ease;border-radius:4px;box-shadow:0 0 8px rgba(212,160,23,.5)"></div>
+    </div>
+
+    <!-- Step list -->
+    <div id="step-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px"></div>
+  </div>
+
+  <!-- Live Results Feed -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-stream"></i> Live Results</div>
+      <button class="btn btn-sm btn-secondary" onclick="clearFeed()"><i class="fas fa-trash"></i> Clear</button>
+    </div>
+    <div class="output-box" id="live-feed" style="max-height:400px">
+      <span class="output-placeholder">Results will stream here as each tool completes…</span>
+    </div>
+  </div>
+</div>
+
+<!-- Final Report Panel -->
+<div id="report-panel" style="display:none">
+  <div class="card" style="border:1px solid var(--accent);box-shadow:0 0 30px rgba(212,160,23,.15)">
+    <div class="card-header">
+      <div class="card-title" style="font-size:1.1em"><i class="fas fa-file-alt" style="color:var(--gold-light)"></i> Scan Complete — Report Ready</div>
+      <span id="report-badge" class="badge badge-high">— findings</span>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="stats-grid" id="report-stats" style="margin-bottom:16px"></div>
+
+    <!-- Findings table -->
+    <div id="findings-preview"></div>
+
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px">
+      <button class="btn btn-primary" id="dl-btn" onclick="downloadReport()" style="padding:12px 28px">
+        <i class="fas fa-download"></i> Download Full Report (HTML)
+      </button>
+      <button class="btn btn-secondary" onclick="resetScan()">
+        <i class="fas fa-redo"></i> New Scan
+      </button>
+    </div>
+    <div id="dl-status" style="margin-top:10px"></div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── State ──────────────────────────────────────────────────────── */
+let scanAborted = false;
+let scanResults = {};
+let reportFilename = '';
+
+const STEPS = {
+  quick: [
+    { id:'dns',     label:'DNS Lookup',          icon:'fa-dns',          api:'/api/recon/dns',       body: t=>({target:t}) },
+    { id:'whois',   label:'WHOIS Lookup',         icon:'fa-id-card',      api:'/api/recon/whois',     body: t=>({target:t}) },
+    { id:'ports',   label:'Port Scan',            icon:'fa-ethernet',     api:'/api/recon/portscan',  body:(t,p)=>({target:t,ports:p}) },
+    { id:'headers', label:'HTTP Headers',         icon:'fa-shield-alt',   api:'/api/recon/headers',   body: t=>({target:t}) },
+    { id:'ssl',     label:'SSL/TLS Analysis',     icon:'fa-lock',         api:'/api/web/ssl',         body: t=>({target:t}) },
+    { id:'tech',    label:'Tech Fingerprint',     icon:'fa-microchip',    api:'/api/web/techdetect',  body: t=>({target:t}) },
+  ],
+  standard: [
+    { id:'dns',     label:'DNS Lookup',           icon:'fa-dns',          api:'/api/recon/dns',       body: t=>({target:t}) },
+    { id:'whois',   label:'WHOIS Lookup',         icon:'fa-id-card',      api:'/api/recon/whois',     body: t=>({target:t}) },
+    { id:'ports',   label:'Port Scan',            icon:'fa-ethernet',     api:'/api/recon/portscan',  body:(t,p)=>({target:t,ports:p}) },
+    { id:'subs',    label:'Subdomain Enum',       icon:'fa-sitemap',      api:'/api/recon/subdomain', body: t=>({target:t}) },
+    { id:'headers', label:'HTTP Headers',         icon:'fa-shield-alt',   api:'/api/recon/headers',   body: t=>({target:t}) },
+    { id:'ssl',     label:'SSL/TLS Analysis',     icon:'fa-lock',         api:'/api/web/ssl',         body: t=>({target:t}) },
+    { id:'tech',    label:'Tech Fingerprint',     icon:'fa-microchip',    api:'/api/web/techdetect',  body: t=>({target:t}) },
+    { id:'dirs',    label:'Directory Brute',      icon:'fa-folder-open',  api:'/api/web/dirbrute',    body: t=>({target:t,wordlist:'common'}) },
+    { id:'sqli',    label:'SQL Injection Test',   icon:'fa-database',     api:'/api/web/sqli',        body: t=>({target:t}) },
+    { id:'xss',     label:'XSS Detection',        icon:'fa-code',         api:'/api/web/xss',         body: t=>({target:t}) },
+  ],
+  deep: [
+    { id:'dns',     label:'DNS Lookup',           icon:'fa-dns',          api:'/api/recon/dns',       body: t=>({target:t}) },
+    { id:'whois',   label:'WHOIS Lookup',         icon:'fa-id-card',      api:'/api/recon/whois',     body: t=>({target:t}) },
+    { id:'ports',   label:'Port Scan',            icon:'fa-ethernet',     api:'/api/recon/portscan',  body:(t,p)=>({target:t,ports:p}) },
+    { id:'subs',    label:'Subdomain Enum',       icon:'fa-sitemap',      api:'/api/recon/subdomain', body: t=>({target:t}) },
+    { id:'headers', label:'HTTP Headers',         icon:'fa-shield-alt',   api:'/api/recon/headers',   body: t=>({target:t}) },
+    { id:'ssl',     label:'SSL/TLS Analysis',     icon:'fa-lock',         api:'/api/web/ssl',         body: t=>({target:t}) },
+    { id:'tech',    label:'Tech Fingerprint',     icon:'fa-microchip',    api:'/api/web/techdetect',  body: t=>({target:t}) },
+    { id:'dirs',    label:'Directory Brute',      icon:'fa-folder-open',  api:'/api/web/dirbrute',    body: t=>({target:t,wordlist:'common'}) },
+    { id:'sqli',    label:'SQL Injection Test',   icon:'fa-database',     api:'/api/web/sqli',        body: t=>({target:t}) },
+    { id:'xss',     label:'XSS Detection',        icon:'fa-code',         api:'/api/web/xss',         body: t=>({target:t}) },
+    { id:'banner',  label:'Banner Grab (80)',     icon:'fa-terminal',     api:'/api/network/banner',  body: t=>({target:t,port:80}) },
+    { id:'banner2', label:'Banner Grab (443)',    icon:'fa-terminal',     api:'/api/network/banner',  body: t=>({target:t,port:443}) },
+    { id:'trace',   label:'Traceroute',           icon:'fa-route',        api:'/api/network/traceroute', body: t=>({target:t}) },
+  ],
+};
+
+/* ── UI helpers ─────────────────────────────────────────────────── */
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function renderStepList(steps) {
+  const el = document.getElementById('step-list');
+  el.innerHTML = steps.map(s => `
+    <div class="step-card" id="step-${s.id}" style="
+      display:flex;align-items:center;gap:12px;
+      background:var(--surface2);border:1px solid var(--border2);
+      border-radius:var(--radius);padding:12px 14px;
+      transition:all .3s ease;
+    ">
+      <div class="step-icon" style="
+        width:34px;height:34px;border-radius:6px;display:flex;
+        align-items:center;justify-content:center;font-size:.95em;
+        background:rgba(212,160,23,.08);color:var(--muted);flex-shrink:0;
+      "><i class="fas ${s.icon}"></i></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.87em;font-weight:600;color:var(--muted)">${esc(s.label)}</div>
+        <div class="step-status" style="font-size:.76em;color:var(--muted);margin-top:2px">Waiting…</div>
+      </div>
+      <div class="step-state" style="font-size:.8em;color:var(--muted)">
+        <i class="fas fa-clock"></i>
+      </div>
+    </div>
+  `).join('');
+}
+
+function setStepRunning(id) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  el.style.borderColor = 'var(--accent)';
+  el.style.background  = 'rgba(212,160,23,.06)';
+  el.querySelector('.step-icon').style.color      = 'var(--accent)';
+  el.querySelector('.step-icon').style.background = 'rgba(212,160,23,.18)';
+  el.querySelector('.step-status').textContent    = 'Running…';
+  el.querySelector('.step-state').innerHTML       = '<span class="spinner" style="width:14px;height:14px;border-width:2px"></span>';
+}
+
+function setStepDone(id, summary, isWarn) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  const col = isWarn ? 'var(--warning)' : 'var(--success)';
+  const ico = isWarn ? 'fa-exclamation-triangle' : 'fa-check-circle';
+  el.style.borderColor = col;
+  el.style.background  = isWarn ? 'rgba(232,160,48,.05)' : 'rgba(109,191,138,.05)';
+  el.querySelector('.step-icon').style.color      = col;
+  el.querySelector('.step-icon').style.background = isWarn ? 'rgba(232,160,48,.15)' : 'rgba(109,191,138,.15)';
+  el.querySelector('.step-status').textContent    = summary || 'Done';
+  el.querySelector('.step-state').innerHTML       = `<i class="fas ${ico}" style="color:${col}"></i>`;
+}
+
+function setStepError(id, msg) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  el.style.borderColor = 'var(--danger)';
+  el.querySelector('.step-icon').style.color      = '#e05252';
+  el.querySelector('.step-icon').style.background = 'rgba(192,57,43,.15)';
+  el.querySelector('.step-status').textContent    = msg || 'Error';
+  el.querySelector('.step-state').innerHTML       = '<i class="fas fa-times-circle" style="color:#e05252"></i>';
+}
+
+function setStepSkipped(id) {
+  const el = document.getElementById(`step-${id}`);
+  if (!el) return;
+  el.style.opacity = '.4';
+  el.querySelector('.step-status').textContent = 'Skipped';
+  el.querySelector('.step-state').innerHTML    = '<i class="fas fa-minus-circle"></i>';
+}
+
+function feed(msg, cls='') {
+  const el = document.getElementById('live-feed');
+  const line = document.createElement('div');
+  line.className = `output-line ${cls}`;
+  line.innerHTML = msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+function clearFeed() {
+  document.getElementById('live-feed').innerHTML = '';
+}
+
+function setProgress(pct, label) {
+  document.getElementById('overall-bar').style.width = pct + '%';
+  document.getElementById('overall-status').textContent = label;
+}
+
+/* ── Main scan orchestrator ─────────────────────────────────────── */
+async function startScan() {
+  const target = document.getElementById('scan-target').value.trim();
+  if (!target) { alert('Enter an IP address or domain name.'); return; }
+
+  const ports = document.getElementById('scan-ports').value;
+  const depth = document.getElementById('scan-depth').value;
+  const steps = STEPS[depth];
+
+  scanAborted = false;
+  scanResults = { target, depth };
+
+  // Show panels, hide input controls
+  document.getElementById('progress-panel').style.display = 'block';
+  document.getElementById('report-panel').style.display   = 'none';
+  document.getElementById('start-btn').style.display      = 'none';
+  document.getElementById('stop-btn').style.display       = 'inline-flex';
+  document.getElementById('overall-bar').style.width      = '0%';
+  clearFeed();
+  renderStepList(steps);
+
+  feed(`<span class="output-line heading">⚡ AUTO SCAN STARTED</span>`);
+  feed(`<span class="output-line info">Target : ${esc(target)}</span>`);
+  feed(`<span class="output-line info">Depth  : ${esc(depth)} (${steps.length} tools)</span>`);
+  feed(`<span class="output-line info">Ports  : ${esc(ports)}</span>`);
+  feed('');
+
+  let completed = 0;
+
+  for (const step of steps) {
+    if (scanAborted) { setStepSkipped(step.id); continue; }
+
+    setStepRunning(step.id);
+    setProgress(Math.round(completed / steps.length * 100), `Running: ${step.label}…`);
+    feed(`<span class="output-line heading">▸ ${esc(step.label)}</span>`);
+
+    let data = null;
+    try {
+      const body = step.body(target, ports);
+      const res  = await fetch(step.api, {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(90000),
+      });
+      data = await res.json();
+    } catch(e) {
+      setStepError(step.id, e.message.slice(0,60));
+      feed(`  <span class="output-line error">✗ Error: ${esc(e.message)}</span>`);
+      completed++;
+      continue;
+    }
+
+    scanResults[step.id] = data;
+    processStepResult(step, data);
+    completed++;
+  }
+
+  setProgress(100, scanAborted ? 'Scan stopped.' : 'Scan complete — generating report…');
+  feed('');
+  feed(`<span class="output-line heading">━━━ SCAN COMPLETE ━━━</span>`);
+  feed(`<span class="output-line success">✓ ${completed} tools finished. Building report…</span>`);
+
+  document.getElementById('stop-btn').style.display  = 'none';
+  document.getElementById('start-btn').style.display = 'inline-flex';
+
+  await buildReport(target, depth);
+}
+
+function stopScan() {
+  scanAborted = true;
+  feed('<span class="output-line warning">⚠ Scan stopped by user.</span>');
+  document.getElementById('stop-btn').style.display  = 'none';
+  document.getElementById('start-btn').style.display = 'inline-flex';
+  setProgress(100, 'Stopped.');
+}
+
+/* ── Per-step result processor ──────────────────────────────────── */
+function processStepResult(step, data) {
+  if (data.error) {
+    setStepError(step.id, data.error.slice(0,80));
+    feed(`  <span class="output-line error">✗ ${esc(data.error)}</span>`);
+    return;
+  }
+
+  switch(step.id) {
+    case 'dns': {
+      const rcount = Object.keys(data.records||{}).reduce((a,k)=>a+(data.records[k]?.length||0),0);
+      setStepDone(step.id, `IP: ${data.ip||'?'} · ${rcount} records`);
+      if (data.ip)          feed(`  <span class="output-line success">✓ IP: ${esc(data.ip)}</span>`);
+      if (data.reverse_dns) feed(`  <span class="output-line info">  Reverse: ${esc(data.reverse_dns)}</span>`);
+      Object.entries(data.records||{}).forEach(([t,v])=>
+        feed(`  <span class="output-line">  ${esc(t)}: ${esc(v.slice(0,3).join(', '))}${v.length>3?' …':''}</span>`)
+      );
+      break;
+    }
+    case 'whois': {
+      const reg = data.data?.registrar || data.data?.raw?.slice(0,60) || 'n/a';
+      setStepDone(step.id, String(reg).slice(0,50));
+      feed(`  <span class="output-line success">✓ WHOIS data retrieved</span>`);
+      if (data.data?.registrar) feed(`  <span class="output-line info">  Registrar: ${esc(data.data.registrar)}</span>`);
+      if (data.data?.expiration_date) feed(`  <span class="output-line info">  Expires: ${esc(data.data.expiration_date)}</span>`);
+      break;
+    }
+    case 'ports': {
+      const open = data.open_ports||[];
+      const warn = open.length > 0;
+      setStepDone(step.id, `${open.length} open / ${data.total_scanned||0} scanned`, warn);
+      feed(`  <span class="output-line ${warn?'warning':'success'}">${warn?'⚠':'✓'} ${open.length} open ports found</span>`);
+      open.slice(0,10).forEach(p=>
+        feed(`  <span class="output-line">  ${esc(String(p.port))} / ${esc(p.service||'?')}</span>`)
+      );
+      if (open.length>10) feed(`  <span class="output-line muted">  … and ${open.length-10} more</span>`);
+      break;
+    }
+    case 'subs': {
+      const found = data.found||[];
+      setStepDone(step.id, `${found.length} subdomains found`, found.length>0);
+      found.slice(0,8).forEach(s=>
+        feed(`  <span class="output-line ${found.length?'warning':'success'}">  ${esc(s.subdomain)} → ${esc(s.ip)}</span>`)
+      );
+      break;
+    }
+    case 'headers': {
+      const missing = Object.values(data.security_headers||{}).filter(v=>v==='MISSING').length;
+      setStepDone(step.id, `${missing} security headers missing`, missing>0);
+      Object.entries(data.security_headers||{}).forEach(([k,v])=>{
+        const cls = v==='MISSING'?'error':'success';
+        const ico = v==='MISSING'?'✗':'✓';
+        feed(`  <span class="output-line ${cls}">${ico} ${esc(k)}: ${esc(v)}</span>`);
+      });
+      break;
+    }
+    case 'ssl': {
+      const issues = data.issues||[];
+      setStepDone(step.id, data.valid ? `Valid · ${data.protocol||''}${issues.length?' · '+issues.length+' issue(s)':''}` : 'INVALID cert', !data.valid||issues.length>0);
+      feed(`  <span class="output-line ${data.valid?'success':'error'}">${data.valid?'✓':'✗'} Certificate: ${data.valid?'VALID':'INVALID'}</span>`);
+      if (data.protocol) feed(`  <span class="output-line info">  Protocol: ${esc(data.protocol)} · Cipher: ${esc(data.cipher?.name||'?')}</span>`);
+      issues.forEach(i=>feed(`  <span class="output-line warning">  ⚠ ${esc(i)}</span>`));
+      break;
+    }
+    case 'tech': {
+      const techs = data.technologies||[];
+      setStepDone(step.id, techs.slice(0,4).join(', ')||'None detected');
+      feed(`  <span class="output-line success">✓ Detected: ${esc(techs.join(', ')||'none')}</span>`);
+      break;
+    }
+    case 'dirs': {
+      const found = data.found||[];
+      setStepDone(step.id, `${found.length} paths found of ${data.scanned||0}`, found.length>0);
+      found.slice(0,6).forEach(f=>
+        feed(`  <span class="output-line warning">  [${esc(String(f.status))}] ${esc(f.url)}</span>`)
+      );
+      break;
+    }
+    case 'sqli': {
+      const vulns = data.vulnerabilities||[];
+      setStepDone(step.id, vulns.length>0 ? `⚠ ${vulns.length} vuln(s) found!` : 'No SQLi detected', vulns.length>0);
+      vulns.forEach(v=>feed(`  <span class="output-line error">✗ [${esc(v.severity)}] ${esc(v.type)} — ${esc(v.payload)}</span>`));
+      if (!vulns.length) feed(`  <span class="output-line success">✓ No SQL injection detected</span>`);
+      break;
+    }
+    case 'xss': {
+      const vulns = data.vulnerabilities||[];
+      setStepDone(step.id, vulns.length>0 ? `⚠ ${vulns.length} vuln(s) found!` : 'No XSS detected', vulns.length>0);
+      vulns.forEach(v=>feed(`  <span class="output-line error">✗ [${esc(v.severity)}] ${esc(v.type)}</span>`));
+      if (!vulns.length) feed(`  <span class="output-line success">✓ No reflected XSS detected</span>`);
+      break;
+    }
+    case 'banner':
+    case 'banner2': {
+      setStepDone(step.id, data.banner ? data.banner.slice(0,50) : 'No banner');
+      if (data.banner) feed(`  <span class="output-line success">✓ ${esc(data.banner.slice(0,120))}</span>`);
+      break;
+    }
+    case 'trace': {
+      const hops = data.hops||[];
+      setStepDone(step.id, `${hops.length} hops`);
+      hops.slice(0,6).forEach(h=>feed(`  <span class="output-line">  Hop ${h.hop}: ${esc(h.ip)}</span>`));
+      break;
+    }
+  }
+  feed('');
+}
+
+/* ── Report builder ─────────────────────────────────────────────── */
+async function buildReport(target, depth) {
+  const r = scanResults;
+
+  // Collect findings
+  const findings = [];
+
+  // Missing security headers → findings
+  const hdrs = r.headers?.security_headers || {};
+  const missingHdrs = Object.entries(hdrs).filter(([,v])=>v==='MISSING').map(([k])=>k);
+  if (missingHdrs.length >= 3) {
+    findings.push({
+      title:`Missing Security Headers (${missingHdrs.length})`,
+      severity:'MEDIUM',
+      description:`The following HTTP security headers are missing: ${missingHdrs.join(', ')}. These headers protect against common attacks like clickjacking, XSS, and MIME sniffing.`,
+      location: target,
+      cvss:'5.3',
+      evidence: `Missing: ${missingHdrs.join(', ')}`,
+      remediation:'Add the missing headers in your web server or application configuration.',
+    });
+  } else if (missingHdrs.length > 0) {
+    findings.push({
+      title:`Missing Security Headers (${missingHdrs.length})`,
+      severity:'LOW',
+      description:`The following HTTP security headers are absent: ${missingHdrs.join(', ')}.`,
+      location: target, cvss:'3.1',
+      evidence: `Missing: ${missingHdrs.join(', ')}`,
+      remediation:'Configure the missing headers in your web server.',
+    });
+  }
+
+  // SSL issues
+  if (r.ssl && !r.ssl.error) {
+    if (!r.ssl.valid) {
+      findings.push({
+        title:'Invalid SSL/TLS Certificate',
+        severity:'HIGH',
+        description:'The SSL/TLS certificate is invalid, expired, or cannot be verified. This exposes users to MITM attacks.',
+        location: target, cvss:'7.4',
+        evidence: r.ssl.error || 'Certificate validation failed',
+        remediation:'Renew or replace the SSL certificate with a valid one from a trusted CA.',
+      });
+    }
+    (r.ssl.issues||[]).forEach(issue=>{
+      findings.push({
+        title:`SSL/TLS Issue: ${issue}`,
+        severity:'MEDIUM',
+        description:`A SSL/TLS configuration weakness was detected: ${issue}`,
+        location: target, cvss:'5.9',
+        evidence: issue,
+        remediation:'Update TLS configuration to use TLS 1.2+ and strong cipher suites only.',
+      });
+    });
+  }
+
+  // SQLi findings
+  (r.sqli?.vulnerabilities||[]).forEach(v=>{
+    findings.push({
+      title:'SQL Injection Detected',
+      severity:'CRITICAL',
+      description:`A SQL injection vulnerability was detected. An attacker could read, modify, or delete database content, or execute OS commands depending on the DBMS.`,
+      location: v.url || target, cvss:'9.8',
+      evidence: `Payload: ${v.payload} | Evidence: ${v.evidence}`,
+      remediation:'Use parameterized queries or prepared statements. Implement input validation and a WAF.',
+    });
+  });
+
+  // XSS findings
+  (r.xss?.vulnerabilities||[]).forEach(v=>{
+    findings.push({
+      title:'Reflected Cross-Site Scripting (XSS)',
+      severity:'HIGH',
+      description:'A reflected XSS vulnerability allows attackers to inject malicious scripts into web pages viewed by other users, enabling session hijacking, credential theft, and defacement.',
+      location: v.url || target, cvss:'6.1',
+      evidence: `Payload reflected: ${v.payload}`,
+      remediation:'Encode all user-supplied output. Implement a strict Content-Security-Policy header.',
+    });
+  });
+
+  // Open high-risk ports
+  const riskyPorts = { 23:'Telnet',21:'FTP',3389:'RDP',445:'SMB',1433:'MSSQL',3306:'MySQL (exposed)',5432:'PostgreSQL (exposed)',6379:'Redis (exposed)',27017:'MongoDB (exposed)' };
+  (r.ports?.open_ports||[]).forEach(p=>{
+    if (riskyPorts[p.port]) {
+      findings.push({
+        title:`Sensitive Port Open: ${p.port}/${riskyPorts[p.port]}`,
+        severity: [23,21,6379,27017].includes(p.port) ? 'HIGH' : 'MEDIUM',
+        description:`Port ${p.port} (${riskyPorts[p.port]}) is open and accessible. This service may expose sensitive data or be vulnerable to brute-force attacks if not properly secured.`,
+        location:`${target}:${p.port}`, cvss: [23,21].includes(p.port)?'7.5':'5.3',
+        evidence:`Port ${p.port} state: open`,
+        remediation:`Firewall port ${p.port} if not required externally. Enforce authentication and encryption.`,
+      });
+    }
+  });
+
+  // Exposed directories
+  const sensitivePaths = ['.git','.env','.htaccess','phpinfo.php','wp-admin','phpmyadmin','admin','config','backup','server-status'];
+  (r.dirs?.found||[]).forEach(f=>{
+    const path = f.url.split('/').pop().toLowerCase();
+    const isSensitive = sensitivePaths.some(s=>path.includes(s));
+    if (isSensitive || f.status === 200) {
+      findings.push({
+        title:`Exposed Path Discovered: ${f.url.split('/').slice(-1)[0]}`,
+        severity: isSensitive ? 'HIGH' : 'LOW',
+        description:`The path ${f.url} returned HTTP ${f.status}. ${isSensitive?'This is a sensitive path that could expose credentials, source code, or administrative interfaces.':''}`,
+        location: f.url, cvss: isSensitive?'7.5':'3.1',
+        evidence:`HTTP ${f.status} — Size: ${f.size} bytes`,
+        remediation:'Restrict access via authentication or firewall rules. Remove sensitive files from web root.',
+      });
+    }
+  });
+
+  // No findings → add informational
+  if (findings.length === 0) {
+    findings.push({
+      title:'No Critical Vulnerabilities Detected',
+      severity:'INFO',
+      description:'Automated scanning did not detect critical vulnerabilities. Manual testing is still recommended for business logic flaws, authentication bypass, and advanced injection techniques.',
+      location: target, cvss:'N/A',
+      evidence:'All automated checks passed.',
+      remediation:'Conduct regular manual penetration tests and keep all software up to date.',
+    });
+  }
+
+  // Build recon summary for report
+  const recon = {
+    open_ports:    r.ports?.open_ports || [],
+    subdomains:    r.subs?.found || [],
+    technologies:  r.tech?.technologies || [],
+    headers:       r.headers?.security_headers || {},
+  };
+
+  // Render summary in UI
+  const severityCounts = {CRITICAL:0,HIGH:0,MEDIUM:0,LOW:0,INFO:0};
+  findings.forEach(f=>{ if(severityCounts[f.severity]!==undefined) severityCounts[f.severity]++; });
+
+  document.getElementById('report-badge').textContent = `${findings.length} finding${findings.length!==1?'s':''}`;
+
+  document.getElementById('report-stats').innerHTML = [
+    ['CRITICAL', severityCounts.CRITICAL, 'var(--critical)', '#ffd700'],
+    ['HIGH',     severityCounts.HIGH,     '#7a2020',         '#ffb3b3'],
+    ['MEDIUM',   severityCounts.MEDIUM,   '#5a3a00',         'var(--warning)'],
+    ['LOW',      severityCounts.LOW,       'var(--surface2)', 'var(--success)'],
+    ['INFO',     severityCounts.INFO,      'var(--surface2)', 'var(--info)'],
+  ].map(([label,count,bg,color])=>`
+    <div class="stat-card" style="border-color:${color}20">
+      <div class="stat-icon" style="background:${bg};color:${color};font-size:1.6em;font-weight:800">${count}</div>
+      <div class="stat-info">
+        <div style="font-size:.75em;font-weight:800;letter-spacing:1px;color:${color}">${label}</div>
+        <div style="font-size:.78em;color:var(--muted)">Finding${count!==1?'s':''}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const sevColor = s=>({'CRITICAL':'var(--critical)','HIGH':'#7a2020','MEDIUM':'#5a3a00','LOW':'var(--surface2)','INFO':'var(--surface2)'}[s]||'var(--surface2)');
+  const sevText  = s=>({'CRITICAL':'#ffd700','HIGH':'#ffb3b3','MEDIUM':'var(--warning)','LOW':'var(--success)','INFO':'var(--info)'}[s]||'var(--muted)');
+
+  document.getElementById('findings-preview').innerHTML = `
+    <div style="font-size:.85em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px">Findings Summary</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${findings.map((f,i)=>`
+        <div style="display:flex;align-items:center;gap:12px;padding:10px 14px;background:var(--surface2);border:1px solid ${sevColor(f.severity)};border-radius:6px;border-left:4px solid ${sevText(f.severity)}">
+          <span style="font-size:.75em;font-weight:800;background:${sevColor(f.severity)};color:${sevText(f.severity)};padding:2px 8px;border-radius:4px;white-space:nowrap">${esc(f.severity)}</span>
+          <span style="font-size:.88em;font-weight:600;flex:1">${esc(f.title)}</span>
+          <span style="font-size:.78em;color:var(--muted)">CVSS ${esc(f.cvss||'N/A')}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  document.getElementById('report-panel').style.display = 'block';
+  document.getElementById('report-panel').scrollIntoView({behavior:'smooth'});
+
+  // Auto-generate downloadable report
+  try {
+    const res = await fetch('/api/reports/generate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({
+        title: `Auto Scan — ${target}`,
+        target,
+        tester: 'Wouapit-Hack Auto Scanner',
+        engagement_type: `${depth.charAt(0).toUpperCase()+depth.slice(1)} Box Auto Scan`,
+        classification: 'CONFIDENTIAL',
+        executive_summary: `An automated ${depth} penetration test was conducted against ${target}. The scanner identified ${findings.length} finding(s) across ${Object.keys(r).length-2} test modules including DNS recon, port scanning, web vulnerability detection, and SSL analysis.`,
+        tools_used: 'Wouapit-Hack Auto Scan (DNS, WHOIS, Port Scan, Subdomain Enum, HTTP Headers, SSL/TLS, Tech Detect, Dir Brute, SQLi, XSS, Banner Grab)',
+        findings,
+        recon,
+      }),
+    });
+    const data = await res.json();
+    if (data.success) {
+      reportFilename = data.filename;
+      feed(`<span class="output-line success">✓ Report saved: ${esc(data.filename)}</span>`);
+      document.getElementById('dl-btn').disabled = false;
+    }
+  } catch(e) {
+    feed(`<span class="output-line error">Report generation error: ${esc(e.message)}</span>`);
+  }
+}
+
+async function downloadReport() {
+  if (!reportFilename) { alert('Report not ready yet.'); return; }
+  const status = document.getElementById('dl-status');
+  status.innerHTML = '<span class="spinner"></span> Preparing download…';
+  try {
+    const res = await fetch(`/api/reports/download/${encodeURIComponent(reportFilename)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = reportFilename;
+    a.click();
+    status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Downloaded: ${esc(reportFilename)}</span>`;
+  } catch(e) {
+    status.innerHTML = `<span style="color:#e05252">Error: ${esc(e.message)}</span>`;
+  }
+}
+
+function resetScan() {
+  scanResults = {};
+  reportFilename = '';
+  document.getElementById('scan-target').value = '';
+  document.getElementById('progress-panel').style.display = 'none';
+  document.getElementById('report-panel').style.display   = 'none';
+  document.getElementById('start-btn').style.display      = 'inline-flex';
+  document.getElementById('stop-btn').style.display       = 'none';
+  document.getElementById('input-card').scrollIntoView({behavior:'smooth'});
+}
+</script>
+{% endblock %}

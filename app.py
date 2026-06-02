@@ -12,6 +12,10 @@ REPORTS_DIR = "/tmp/wouapit-reports" if os.environ.get("VERCEL") else os.path.jo
 def dashboard():
     return render_template("dashboard.html")
 
+@app.route("/autoscan")
+def autoscan():
+    return render_template("autoscan.html")
+
 @app.route("/recon")
 def recon():
     return render_template("recon.html")

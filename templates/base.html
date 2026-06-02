@@ -28,6 +28,9 @@
     <li class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
       <a href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
     </li>
+    <li class="nav-item {% if request.endpoint == 'autoscan' %}active{% endif %}" style="margin:6px 8px">
+      <a href="{{ url_for('autoscan') }}" style="background:linear-gradient(135deg,rgba(212,160,23,.22),rgba(212,160,23,.08));border:1px solid rgba(212,160,23,.35);color:var(--gold-light);border-radius:var(--radius)"><i class="fas fa-crosshairs" style="color:var(--gold-light)"></i><span>⚡ Auto Scan</span></a>
+    </li>
     <li class="nav-section"><span>RECONNAISSANCE</span></li>
     <li class="nav-item {% if request.endpoint == 'recon' %}active{% endif %}">
       <a href="{{ url_for('recon') }}"><i class="fas fa-search"></i><span>Recon Suite</span></a>
