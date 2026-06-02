@@ -137,6 +137,96 @@ def api_techdetect():
         return jsonify({"error": "No URL provided"}), 400
     return jsonify(tech_detect(url))
 
+@app.route("/api/web/cors", methods=["POST"])
+def api_cors():
+    from modules.web_scanner import cors_check
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(cors_check(url))
+
+@app.route("/api/web/redirect", methods=["POST"])
+def api_redirect():
+    from modules.web_scanner import open_redirect_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(open_redirect_test(url))
+
+@app.route("/api/web/clickjacking", methods=["POST"])
+def api_clickjacking():
+    from modules.web_scanner import clickjacking_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(clickjacking_test(url))
+
+@app.route("/api/web/httpmethods", methods=["POST"])
+def api_httpmethods():
+    from modules.web_scanner import http_methods_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(http_methods_test(url))
+
+@app.route("/api/web/lfi", methods=["POST"])
+def api_lfi():
+    from modules.web_scanner import lfi_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(lfi_test(url))
+
+@app.route("/api/web/cmdinject", methods=["POST"])
+def api_cmdinject():
+    from modules.web_scanner import cmd_injection_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(cmd_injection_test(url))
+
+@app.route("/api/web/ssti", methods=["POST"])
+def api_ssti():
+    from modules.web_scanner import ssti_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(ssti_test(url))
+
+@app.route("/api/web/ssrf", methods=["POST"])
+def api_ssrf():
+    from modules.web_scanner import ssrf_test
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(ssrf_test(url))
+
+@app.route("/api/web/cookies", methods=["POST"])
+def api_cookies():
+    from modules.web_scanner import cookie_analyzer
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(cookie_analyzer(url))
+
+@app.route("/api/web/csrf", methods=["POST"])
+def api_csrf():
+    from modules.web_scanner import csrf_check
+    data = request.json
+    url = data.get("target", "").strip()
+    if not url:
+        return jsonify({"error": "No URL provided"}), 400
+    return jsonify(csrf_check(url))
+
 @app.route("/api/network/ping", methods=["POST"])
 def api_ping():
     from modules.network import ping_sweep
