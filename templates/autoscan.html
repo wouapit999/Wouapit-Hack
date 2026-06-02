@@ -86,15 +86,21 @@
     <!-- Findings table -->
     <div id="findings-preview"></div>
 
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px">
-      <button class="btn btn-primary" id="dl-btn" onclick="downloadReport()" style="padding:12px 28px">
-        <i class="fas fa-download"></i> Download Full Report (HTML)
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;align-items:center">
+      <button class="btn btn-primary" id="dl-html-btn" onclick="downloadReport('html')" style="padding:12px 22px">
+        <i class="fas fa-file-code"></i> HTML Report
       </button>
-      <button class="btn btn-secondary" onclick="resetScan()">
+      <button class="btn btn-primary" id="dl-pdf-btn" onclick="downloadReport('pdf')" style="padding:12px 22px;background:linear-gradient(135deg,#b8860b,#8b6914)">
+        <i class="fas fa-file-pdf"></i> PDF Report
+      </button>
+      <button class="btn btn-warning" id="dl-rem-btn" onclick="downloadReport('remediation')" style="padding:12px 22px">
+        <i class="fas fa-tools"></i> Remediation PDF
+      </button>
+      <button class="btn btn-secondary" onclick="resetScan()" style="margin-left:auto">
         <i class="fas fa-redo"></i> New Scan
       </button>
     </div>
-    <div id="dl-status" style="margin-top:10px"></div>
+    <div id="dl-status" style="margin-top:12px"></div>
   </div>
 </div>
 
@@ -105,7 +111,8 @@
 /* ── State ──────────────────────────────────────────────────────── */
 let scanAborted = false;
 let scanResults = {};
-let reportFilename = '';
+let reportFilenames = { html: '', pdf: '', remediation: '' };
+let reportPayload   = null;
 
 const STEPS = {
   quick: [
@@ -589,61 +596,117 @@ async function buildReport(target, depth) {
 
   document.getElementById('report-panel').style.display = 'block';
   document.getElementById('report-panel').scrollIntoView({behavior:'smooth'});
+  setDlBtns(false); // disable until each file is ready
 
-  // Auto-generate downloadable report
+  // Build shared payload once
+  reportPayload = {
+    title: `Auto Scan — ${target}`,
+    target,
+    tester: 'Wouapit-Hack Auto Scanner',
+    engagement_type: `${depth.charAt(0).toUpperCase()+depth.slice(1)} Auto Scan`,
+    classification: 'CONFIDENTIAL',
+    executive_summary: `An automated ${depth} penetration test was conducted against ${target}. `+
+      `The scanner identified ${findings.length} finding(s) across multiple modules including DNS recon, `+
+      `port scanning, web vulnerability detection, and SSL/TLS analysis.`,
+    tools_used: 'Wouapit-Hack (DNS, WHOIS, Port Scan, Subdomain Enum, HTTP Headers, SSL/TLS, Tech Detect, Dir Brute, SQLi, XSS, Banner Grab)',
+    findings,
+    recon,
+  };
+
+  const status = document.getElementById('dl-status');
+  status.innerHTML = '<span class="spinner"></span> Generating HTML report…';
+
+  // 1 — HTML report
   try {
-    const res = await fetch('/api/reports/generate', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({
-        title: `Auto Scan — ${target}`,
-        target,
-        tester: 'Wouapit-Hack Auto Scanner',
-        engagement_type: `${depth.charAt(0).toUpperCase()+depth.slice(1)} Box Auto Scan`,
-        classification: 'CONFIDENTIAL',
-        executive_summary: `An automated ${depth} penetration test was conducted against ${target}. The scanner identified ${findings.length} finding(s) across ${Object.keys(r).length-2} test modules including DNS recon, port scanning, web vulnerability detection, and SSL analysis.`,
-        tools_used: 'Wouapit-Hack Auto Scan (DNS, WHOIS, Port Scan, Subdomain Enum, HTTP Headers, SSL/TLS, Tech Detect, Dir Brute, SQLi, XSS, Banner Grab)',
-        findings,
-        recon,
-      }),
-    });
+    const res  = await fetch('/api/reports/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reportPayload) });
     const data = await res.json();
     if (data.success) {
-      reportFilename = data.filename;
-      feed(`<span class="output-line success">✓ Report saved: ${esc(data.filename)}</span>`);
-      document.getElementById('dl-btn').disabled = false;
+      reportFilenames.html = data.filename;
+      document.getElementById('dl-html-btn').disabled = false;
+      feed(`<span class="output-line success">✓ HTML report ready: ${esc(data.filename)}</span>`);
     }
-  } catch(e) {
-    feed(`<span class="output-line error">Report generation error: ${esc(e.message)}</span>`);
-  }
+  } catch(e) { feed(`<span class="output-line error">HTML report error: ${esc(e.message)}</span>`); }
+
+  status.innerHTML = '<span class="spinner"></span> Generating PDF report…';
+
+  // 2 — PDF pentest report
+  try {
+    const res  = await fetch('/api/reports/generate-pdf', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reportPayload) });
+    const data = await res.json();
+    if (data.success) {
+      reportFilenames.pdf = data.filename;
+      document.getElementById('dl-pdf-btn').disabled = false;
+      feed(`<span class="output-line success">✓ PDF report ready: ${esc(data.filename)}</span>`);
+    } else {
+      feed(`<span class="output-line warning">⚠ PDF: ${esc(data.error||'unknown error')}</span>`);
+    }
+  } catch(e) { feed(`<span class="output-line error">PDF report error: ${esc(e.message)}</span>`); }
+
+  status.innerHTML = '<span class="spinner"></span> Generating Remediation PDF…';
+
+  // 3 — Remediation PDF
+  try {
+    const res  = await fetch('/api/reports/generate-remediation', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reportPayload) });
+    const data = await res.json();
+    if (data.success) {
+      reportFilenames.remediation = data.filename;
+      document.getElementById('dl-rem-btn').disabled = false;
+      feed(`<span class="output-line success">✓ Remediation PDF ready: ${esc(data.filename)}</span>`);
+    } else {
+      feed(`<span class="output-line warning">⚠ Remediation PDF: ${esc(data.error||'unknown error')}</span>`);
+    }
+  } catch(e) { feed(`<span class="output-line error">Remediation PDF error: ${esc(e.message)}</span>`); }
+
+  status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i>
+    All reports generated — click a button above to download.</span>`;
+  feed('');
+  feed(`<span class="output-line heading">📄 Reports ready for download.</span>`);
 }
 
-async function downloadReport() {
-  if (!reportFilename) { alert('Report not ready yet.'); return; }
+/* enable/disable all three download buttons */
+function setDlBtns(enabled) {
+  ['dl-html-btn','dl-pdf-btn','dl-rem-btn'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !enabled;
+  });
+}
+
+async function downloadReport(type) {
+  const fname = reportFilenames[type];
+  if (!fname) { alert('This report is not ready yet — please wait.'); return; }
   const status = document.getElementById('dl-status');
-  status.innerHTML = '<span class="spinner"></span> Preparing download…';
+  const labels = { html:'HTML Report', pdf:'PDF Report', remediation:'Remediation PDF' };
+  status.innerHTML = `<span class="spinner"></span> Downloading ${labels[type]}…`;
   try {
-    const res = await fetch(`/api/reports/download/${encodeURIComponent(reportFilename)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const res = await fetch(`/api/reports/download/${encodeURIComponent(fname)}`);
+    if (!res.ok) throw new Error(`Server returned HTTP ${res.status}`);
     const blob = await res.blob();
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = reportFilename;
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a);
     a.click();
-    status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i> Downloaded: ${esc(reportFilename)}</span>`;
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i>
+      Downloaded: <strong>${esc(fname)}</strong></span>`;
   } catch(e) {
-    status.innerHTML = `<span style="color:#e05252">Error: ${esc(e.message)}</span>`;
+    status.innerHTML = `<span style="color:#e05252"><i class="fas fa-times-circle"></i>
+      Download failed: ${esc(e.message)}</span>`;
   }
 }
 
 function resetScan() {
-  scanResults = {};
-  reportFilename = '';
-  document.getElementById('scan-target').value = '';
+  scanResults    = {};
+  reportFilenames = { html:'', pdf:'', remediation:'' };
+  reportPayload  = null;
+  document.getElementById('scan-target').value            = '';
   document.getElementById('progress-panel').style.display = 'none';
   document.getElementById('report-panel').style.display   = 'none';
   document.getElementById('start-btn').style.display      = 'inline-flex';
   document.getElementById('stop-btn').style.display       = 'none';
+  document.getElementById('dl-status').innerHTML          = '';
+  setDlBtns(false);
   document.getElementById('input-card').scrollIntoView({behavior:'smooth'});
 }
 </script>

@@ -224,11 +224,24 @@ def api_report_gen():
     data = request.json
     return jsonify(generate_report(data, REPORTS_DIR))
 
+@app.route("/api/reports/generate-pdf", methods=["POST"])
+def api_report_pdf():
+    from modules.pdf_reporter import generate_pdf_report
+    data = request.json
+    return jsonify(generate_pdf_report(data, REPORTS_DIR))
+
+@app.route("/api/reports/generate-remediation", methods=["POST"])
+def api_remediation_pdf():
+    from modules.pdf_reporter import generate_remediation_pdf
+    data = request.json
+    return jsonify(generate_remediation_pdf(data, REPORTS_DIR))
+
 @app.route("/api/reports/download/<filename>")
 def api_report_download(filename):
     path = os.path.join(REPORTS_DIR, os.path.basename(filename))
     if os.path.exists(path):
-        return send_file(path, as_attachment=True)
+        mime = "application/pdf" if filename.endswith(".pdf") else "text/html"
+        return send_file(path, as_attachment=True, mimetype=mime)
     return jsonify({"error": "File not found"}), 404
 
 if __name__ == "__main__":

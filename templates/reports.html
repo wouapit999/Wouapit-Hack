@@ -91,9 +91,17 @@
       </div>
     </div>
 
-    <button class="btn btn-primary btn-full" style="padding:14px" onclick="generateReport()">
-      <i class="fas fa-file-download"></i> Generate Professional Report
-    </button>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+      <button class="btn btn-secondary btn-full" style="padding:12px" onclick="generateReport('html')">
+        <i class="fas fa-file-code"></i> HTML Report
+      </button>
+      <button class="btn btn-primary btn-full" style="padding:12px;background:linear-gradient(135deg,#b8860b,#8b6914)" onclick="generateReport('pdf')">
+        <i class="fas fa-file-pdf"></i> PDF Report
+      </button>
+      <button class="btn btn-warning btn-full" style="padding:12px" onclick="generateReport('remediation')">
+        <i class="fas fa-tools"></i> Remediation PDF
+      </button>
+    </div>
     <div id="report-status" style="margin-top:12px"></div>
   </div>
 
@@ -106,16 +114,31 @@
       {% if report_files %}
         <ul style="list-style:none">
           {% for f in report_files %}
-          <li style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
-            <span style="font-size:.88em;color:var(--teal)"><i class="fas fa-file-code" style="margin-right:8px"></i>{{ f }}</span>
-            <a href="/api/reports/download/{{ f }}" class="btn btn-sm btn-secondary" download>
-              <i class="fas fa-download"></i> Download
+          {% set is_pdf = f.endswith('.pdf') %}
+          {% set is_rem = 'remediation' in f %}
+          <li style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--border2)">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0">
+              <i class="fas {% if is_pdf %}fa-file-pdf{% else %}fa-file-code{% endif %}"
+                 style="color:{% if is_rem %}var(--warning){% elif is_pdf %}var(--accent){% else %}var(--info){% endif %};font-size:1.1em;flex-shrink:0"></i>
+              <div style="min-width:0">
+                <div style="font-size:.83em;color:var(--teal);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f }}</div>
+                <div style="font-size:.74em;color:var(--muted);margin-top:2px">
+                  {% if is_rem %}Remediation PDF{% elif is_pdf %}Pentest PDF{% else %}HTML Report{% endif %}
+                </div>
+              </div>
+            </div>
+            <a href="/api/reports/download/{{ f }}" class="btn btn-sm btn-secondary" download style="flex-shrink:0">
+              <i class="fas fa-download"></i>
             </a>
           </li>
           {% endfor %}
         </ul>
       {% else %}
-        <p style="color:var(--muted);font-size:.88em;text-align:center;padding:20px">No reports generated yet.</p>
+        <div style="text-align:center;padding:28px 20px">
+          <i class="fas fa-folder-open" style="font-size:2em;color:var(--muted);margin-bottom:10px;display:block"></i>
+          <p style="color:var(--muted);font-size:.88em">No reports yet. Run an Auto Scan or build one manually.</p>
+          <a href="/autoscan" class="btn btn-sm btn-primary" style="margin-top:12px"><i class="fas fa-crosshairs"></i> Go to Auto Scan</a>
+        </div>
       {% endif %}
     </div>
 
@@ -233,14 +256,9 @@ function tryJSON(val, fallback) {
   catch { return fallback; }
 }
 
-async function generateReport() {
-  const status = document.getElementById('report-status');
-  status.innerHTML = '<span class="spinner"></span><span class="loading-text"> Generating report…</span>';
-
+function buildPayload() {
   const techRaw = document.getElementById('r-tech').value;
-  const technologies = techRaw ? techRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
-
-  const payload = {
+  return {
     title:             document.getElementById('r-title').value || 'Penetration Test Report',
     target:            document.getElementById('r-target').value || 'Unknown',
     tester:            document.getElementById('r-tester').value || 'Security Team',
@@ -250,37 +268,78 @@ async function generateReport() {
     tools_used:        document.getElementById('r-tools').value,
     findings:          collectFindings(),
     recon: {
-      open_ports:   tryJSON(document.getElementById('r-ports').value, []),
-      subdomains:   tryJSON(document.getElementById('r-subs').value, []),
-      technologies,
-      headers:      tryJSON(document.getElementById('r-hdrs').value, {}),
+      open_ports:  tryJSON(document.getElementById('r-ports').value, []),
+      subdomains:  tryJSON(document.getElementById('r-subs').value, []),
+      technologies: techRaw ? techRaw.split(',').map(s => s.trim()).filter(Boolean) : [],
+      headers:     tryJSON(document.getElementById('r-hdrs').value, {}),
     },
   };
+}
+
+const REPORT_ENDPOINTS = {
+  html:        { url: '/api/reports/generate',             label: 'HTML Report',      icon: 'fa-file-code',  btnCls: 'btn-secondary' },
+  pdf:         { url: '/api/reports/generate-pdf',         label: 'PDF Report',       icon: 'fa-file-pdf',   btnCls: 'btn-primary'   },
+  remediation: { url: '/api/reports/generate-remediation', label: 'Remediation PDF',  icon: 'fa-tools',      btnCls: 'btn-warning'   },
+};
+
+async function generateReport(type) {
+  const cfg    = REPORT_ENDPOINTS[type];
+  const status = document.getElementById('report-status');
+  status.innerHTML = `<span class="spinner"></span><span class="loading-text"> Generating ${cfg.label}…</span>`;
+
+  const payload = buildPayload();
 
   try {
-    const res  = await fetch('/api/reports/generate', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
-    });
+    const res  = await fetch(cfg.url, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
     const data = await res.json();
+
     if (data.success) {
+      const isPdf    = data.filename.endsWith('.pdf');
+      const findings = data.summary?.total_findings ?? data.summary?.total ?? '—';
       status.innerHTML = `
-        <div class="alert alert-success">
-          <i class="fas fa-check-circle"></i>
-          <div>
-            Report generated: <strong>${escHtml(data.filename)}</strong>
-            (${data.summary.total_findings} findings)
-            <br><a href="/api/reports/download/${escHtml(data.filename)}" class="btn btn-sm btn-success" style="margin-top:8px" download>
-              <i class="fas fa-download"></i> Download Report
-            </a>
+        <div class="alert alert-success" style="flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:center;gap:10px">
+            <i class="fas fa-check-circle" style="font-size:1.2em"></i>
+            <div>
+              <strong>${escHtml(cfg.label)}</strong> generated — ${findings} finding(s)<br>
+              <span style="font-size:.8em;color:var(--muted)">${escHtml(data.filename)}</span>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-success" onclick="triggerDownload('${escHtml(data.filename)}','${escHtml(cfg.label)}')">
+              <i class="fas fa-download"></i> Download ${escHtml(cfg.label)}
+            </button>
+            ${type === 'html' ? `
+            <button class="btn btn-sm btn-secondary" onclick="generateReport('pdf')">
+              <i class="fas fa-file-pdf"></i> Also generate PDF
+            </button>
+            <button class="btn btn-sm btn-secondary" onclick="generateReport('remediation')">
+              <i class="fas fa-tools"></i> Also generate Remediation PDF
+            </button>` : ''}
           </div>
         </div>`;
     } else {
-      status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(data.error||'Unknown error')}</div>`;
+      status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(data.error || 'Unknown error')}</div>`;
     }
   } catch(e) {
     status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(e.message)}</div>`;
+  }
+}
+
+async function triggerDownload(filename, label) {
+  try {
+    const res  = await fetch(`/api/reports/download/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const blob = await res.blob();
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch(e) {
+    alert(`Download failed: ${e.message}`);
   }
 }
 </script>
