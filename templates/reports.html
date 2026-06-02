@@ -91,18 +91,42 @@
       </div>
     </div>
 
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
-      <button class="btn btn-secondary btn-full" style="padding:12px" onclick="generateReport('html')">
-        <i class="fas fa-file-code"></i> HTML Report
-      </button>
-      <button class="btn btn-primary btn-full" style="padding:12px;background:linear-gradient(135deg,#b8860b,#8b6914)" onclick="generateReport('pdf')">
-        <i class="fas fa-file-pdf"></i> PDF Report
+    <!-- Format chooser -->
+    <div class="form-group">
+      <label class="form-label">Output Format</label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap" id="fmt-selector">
+        <label class="fmt-opt selected" id="fmt-pdf" onclick="selectFmt('pdf')">
+          <i class="fas fa-file-pdf"></i> PDF
+        </label>
+        <label class="fmt-opt" id="fmt-docx" onclick="selectFmt('docx')">
+          <i class="fas fa-file-word"></i> DOCX (Word)
+        </label>
+        <label class="fmt-opt" id="fmt-html" onclick="selectFmt('html')">
+          <i class="fas fa-file-code"></i> HTML
+        </label>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-primary btn-full" style="padding:12px" onclick="generateReport('pentest')">
+        <i class="fas fa-shield-alt"></i> Generate Pentest Report
       </button>
       <button class="btn btn-warning btn-full" style="padding:12px" onclick="generateReport('remediation')">
-        <i class="fas fa-tools"></i> Remediation PDF
+        <i class="fas fa-tools"></i> Generate Remediation Report
       </button>
     </div>
     <div id="report-status" style="margin-top:12px"></div>
+
+    <style>
+    .fmt-opt {
+      display:inline-flex;align-items:center;gap:8px;padding:9px 18px;
+      border-radius:var(--radius);border:2px solid var(--border2);
+      background:var(--surface2);color:var(--muted);cursor:pointer;
+      font-size:.88em;font-weight:600;transition:all .2s ease;
+    }
+    .fmt-opt:hover { border-color:var(--accent);color:var(--accent); }
+    .fmt-opt.selected { border-color:var(--gold-light);background:rgba(212,160,23,.12);color:var(--gold-light); }
+    </style>
   </div>
 
   <!-- Saved Reports & Finding Template -->
@@ -276,14 +300,31 @@ function buildPayload() {
   };
 }
 
-const REPORT_ENDPOINTS = {
-  html:        { url: '/api/reports/generate',             label: 'HTML Report',      icon: 'fa-file-code',  btnCls: 'btn-secondary' },
-  pdf:         { url: '/api/reports/generate-pdf',         label: 'PDF Report',       icon: 'fa-file-pdf',   btnCls: 'btn-primary'   },
-  remediation: { url: '/api/reports/generate-remediation', label: 'Remediation PDF',  icon: 'fa-tools',      btnCls: 'btn-warning'   },
+let currentFmt = 'pdf';
+
+function selectFmt(fmt) {
+  currentFmt = fmt;
+  document.querySelectorAll('.fmt-opt').forEach(el => el.classList.remove('selected'));
+  document.getElementById(`fmt-${fmt}`).classList.add('selected');
+}
+
+// endpoint matrix: [pentest-fmt, remediation-fmt]
+const ENDPOINTS = {
+  'pentest-pdf':        { url:'/api/reports/generate-pdf',              label:'Pentest Report (PDF)',         ext:'pdf' },
+  'pentest-docx':       { url:'/api/reports/generate-docx',             label:'Pentest Report (Word)',         ext:'docx' },
+  'pentest-html':       { url:'/api/reports/generate',                  label:'Pentest Report (HTML)',         ext:'html' },
+  'remediation-pdf':    { url:'/api/reports/generate-remediation',      label:'Remediation Report (PDF)',      ext:'pdf' },
+  'remediation-docx':   { url:'/api/reports/generate-remediation-docx', label:'Remediation Report (Word)',     ext:'docx' },
+  'remediation-html':   { url:'/api/reports/generate',                  label:'Remediation Report (HTML)',     ext:'html' },
 };
 
+const FORMAT_ICONS = { pdf:'fa-file-pdf', docx:'fa-file-word', html:'fa-file-code' };
+
 async function generateReport(type) {
-  const cfg    = REPORT_ENDPOINTS[type];
+  const key    = `${type}-${currentFmt}`;
+  const cfg    = ENDPOINTS[key];
+  if (!cfg) { alert('Format not available.'); return; }
+
   const status = document.getElementById('report-status');
   status.innerHTML = `<span class="spinner"></span><span class="loading-text"> Generating ${cfg.label}…</span>`;
 
@@ -294,29 +335,19 @@ async function generateReport(type) {
     const data = await res.json();
 
     if (data.success) {
-      const isPdf    = data.filename.endsWith('.pdf');
       const findings = data.summary?.total_findings ?? data.summary?.total ?? '—';
       status.innerHTML = `
         <div class="alert alert-success" style="flex-direction:column;gap:10px">
           <div style="display:flex;align-items:center;gap:10px">
-            <i class="fas fa-check-circle" style="font-size:1.2em"></i>
+            <i class="fas ${FORMAT_ICONS[currentFmt]||'fa-file'}" style="font-size:1.3em;color:var(--accent)"></i>
             <div>
-              <strong>${escHtml(cfg.label)}</strong> generated — ${findings} finding(s)<br>
-              <span style="font-size:.8em;color:var(--muted)">${escHtml(data.filename)}</span>
+              <strong>${escHtml(cfg.label)}</strong> — ${findings} finding(s)<br>
+              <span style="font-size:.78em;color:var(--muted)">${escHtml(data.filename)}</span>
             </div>
           </div>
-          <div style="display:flex;gap:10px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-success" onclick="triggerDownload('${escHtml(data.filename)}','${escHtml(cfg.label)}')">
-              <i class="fas fa-download"></i> Download ${escHtml(cfg.label)}
-            </button>
-            ${type === 'html' ? `
-            <button class="btn btn-sm btn-secondary" onclick="generateReport('pdf')">
-              <i class="fas fa-file-pdf"></i> Also generate PDF
-            </button>
-            <button class="btn btn-sm btn-secondary" onclick="generateReport('remediation')">
-              <i class="fas fa-tools"></i> Also generate Remediation PDF
-            </button>` : ''}
-          </div>
+          <button class="btn btn-sm btn-success" onclick="triggerDownload('${escHtml(data.filename)}')">
+            <i class="fas fa-download"></i> Download ${escHtml(cfg.label)}
+          </button>
         </div>`;
     } else {
       status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(data.error || 'Unknown error')}</div>`;
@@ -326,7 +357,7 @@ async function generateReport(type) {
   }
 }
 
-async function triggerDownload(filename, label) {
+async function triggerDownload(filename) {
   try {
     const res  = await fetch(`/api/reports/download/${encodeURIComponent(filename)}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

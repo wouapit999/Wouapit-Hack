@@ -120,21 +120,38 @@
     </div>
     <div class="stats-grid" id="report-stats" style="margin-bottom:16px"></div>
     <div id="findings-preview"></div>
-    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;align-items:center">
-      <button class="btn btn-secondary" id="dl-html-btn" onclick="downloadReport('html')" disabled style="padding:12px 20px">
-        <i class="fas fa-file-code"></i> HTML Report
+    <!-- Format selector -->
+    <div style="margin-top:16px;margin-bottom:12px">
+      <div style="font-size:.78em;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Choose Download Format</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="as-fmt selected" id="as-fmt-pdf"  onclick="asSelectFmt('pdf')"><i class="fas fa-file-pdf"></i> PDF</label>
+        <label class="as-fmt"          id="as-fmt-docx" onclick="asSelectFmt('docx')"><i class="fas fa-file-word"></i> DOCX (Word)</label>
+        <label class="as-fmt"          id="as-fmt-html" onclick="asSelectFmt('html')"><i class="fas fa-file-code"></i> HTML</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-primary" id="dl-pentest-btn" onclick="downloadAS('pentest')" disabled style="padding:11px 20px">
+        <i class="fas fa-shield-alt"></i> Pentest Report
       </button>
-      <button class="btn btn-primary" id="dl-pdf-btn" onclick="downloadReport('pdf')" disabled style="padding:12px 20px;background:linear-gradient(135deg,#b8860b,#8b6914)">
-        <i class="fas fa-file-pdf"></i> PDF Report
-      </button>
-      <button class="btn btn-warning" id="dl-rem-btn" onclick="downloadReport('remediation')" disabled style="padding:12px 20px">
-        <i class="fas fa-tools"></i> Remediation PDF
+      <button class="btn btn-warning" id="dl-rem-btn" onclick="downloadAS('remediation')" disabled style="padding:11px 20px">
+        <i class="fas fa-tools"></i> Remediation Report
       </button>
       <button class="btn btn-secondary" onclick="resetScan()" style="margin-left:auto">
         <i class="fas fa-redo"></i> New Scan
       </button>
     </div>
     <div id="dl-status" style="margin-top:12px"></div>
+
+    <style>
+    .as-fmt {
+      display:inline-flex;align-items:center;gap:7px;padding:8px 16px;
+      border-radius:var(--radius);border:2px solid var(--border2);
+      background:var(--surface2);color:var(--muted);cursor:pointer;
+      font-size:.83em;font-weight:600;transition:all .2s ease;
+    }
+    .as-fmt:hover { border-color:var(--accent);color:var(--accent); }
+    .as-fmt.selected { border-color:var(--gold-light);background:rgba(212,160,23,.12);color:var(--gold-light); }
+    </style>
   </div>
 </div>
 
@@ -173,10 +190,26 @@
 {% block scripts %}
 <script>
 /* ── State ──────────────────────────────────────────────────────── */
-let currentHat = 'gray';
-let scanAborted = false;
-let scanResults = {};
-let reportFilenames = { html:'', pdf:'', remediation:'' };
+let currentHat   = 'gray';
+let currentFmtAS = 'pdf';
+let scanAborted  = false;
+let scanResults  = {};
+let reportFilenames = {};  // keyed "pentest-pdf", "remediation-docx", etc.
+
+const AS_ENDPOINTS = {
+  'pentest-pdf':      '/api/reports/generate-pdf',
+  'pentest-docx':     '/api/reports/generate-docx',
+  'pentest-html':     '/api/reports/generate',
+  'remediation-pdf':  '/api/reports/generate-remediation',
+  'remediation-docx': '/api/reports/generate-remediation-docx',
+  'remediation-html': '/api/reports/generate',
+};
+
+function asSelectFmt(fmt) {
+  currentFmtAS = fmt;
+  document.querySelectorAll('.as-fmt').forEach(el => el.classList.remove('selected'));
+  const el = document.getElementById(`as-fmt-${fmt}`); if (el) el.classList.add('selected');
+}
 let reportPayload   = null;
 
 /* ── Hat tool definitions ───────────────────────────────────────── */
@@ -600,19 +633,23 @@ async function buildReport(target) {
     },
   };
 
+  // Generate both pentest + remediation in the currently-selected format
   const status = document.getElementById('dl-status');
-  for (const [type, url, label] of [
-    ['html',        '/api/reports/generate',             'HTML report'],
-    ['pdf',         '/api/reports/generate-pdf',         'PDF report'],
-    ['remediation', '/api/reports/generate-remediation', 'Remediation PDF'],
-  ]) {
+  const fmtLabel = {pdf:'PDF', docx:'Word (DOCX)', html:'HTML'}[currentFmtAS] || currentFmtAS.toUpperCase();
+
+  for (const rtype of ['pentest', 'remediation']) {
+    const key   = `${rtype}-${currentFmtAS}`;
+    const url   = AS_ENDPOINTS[key];
+    const label = `${rtype === 'pentest' ? 'Pentest' : 'Remediation'} ${fmtLabel}`;
+    if (!url) continue;
     status.innerHTML = `<span class="spinner"></span> Generating ${label}…`;
     try {
       const res  = await fetch(url, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(reportPayload) });
       const data = await res.json();
       if (data.success) {
-        reportFilenames[type] = data.filename;
-        document.getElementById(`dl-${type === 'remediation' ? 'rem' : type}-btn`).disabled = false;
+        reportFilenames[key] = data.filename;
+        const btnId = rtype === 'pentest' ? 'dl-pentest-btn' : 'dl-rem-btn';
+        const btn = document.getElementById(btnId); if (btn) btn.disabled = false;
         feed(`<span class="output-line success">✓ ${label} ready: ${esc(data.filename)}</span>`);
       } else {
         feed(`<span class="output-line warning">⚠ ${label}: ${esc(data.error||'error')}</span>`);
@@ -621,13 +658,14 @@ async function buildReport(target) {
       feed(`<span class="output-line error">✗ ${label} failed: ${esc(e.message)}</span>`);
     }
   }
-  status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i> All reports ready — click above to download.</span>`;
+  status.innerHTML = `<span style="color:var(--success)"><i class="fas fa-check-circle"></i> ${fmtLabel} reports ready — click above to download.</span>`;
 }
 
 /* ── Downloads ──────────────────────────────────────────────────── */
-async function downloadReport(type) {
-  const fname = reportFilenames[type];
-  if (!fname) { alert('Report not ready.'); return; }
+async function downloadAS(rtype) {
+  const key   = `${rtype}-${currentFmtAS}`;
+  const fname = reportFilenames[key];
+  if (!fname) { alert('Report not ready — please wait for scan to complete.'); return; }
   const status = document.getElementById('dl-status');
   status.innerHTML = `<span class="spinner"></span> Downloading…`;
   try {
@@ -647,7 +685,7 @@ async function downloadReport(type) {
 
 function resetScan() {
   scanResults     = {};
-  reportFilenames = { html:'', pdf:'', remediation:'' };
+  reportFilenames = {};
   reportPayload   = null;
   document.getElementById('scan-target').value            = '';
   document.getElementById('progress-panel').style.display = 'none';
@@ -655,7 +693,7 @@ function resetScan() {
   document.getElementById('start-btn').style.display      = 'inline-flex';
   document.getElementById('stop-btn').style.display       = 'none';
   document.getElementById('dl-status').innerHTML          = '';
-  ['dl-html-btn','dl-pdf-btn','dl-rem-btn'].forEach(id => {
+  ['dl-pentest-btn','dl-rem-btn'].forEach(id => {
     const el = document.getElementById(id); if(el) el.disabled = true;
   });
   document.getElementById('input-card').scrollIntoView({behavior:'smooth'});

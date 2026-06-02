@@ -326,11 +326,25 @@ def api_remediation_pdf():
     data = request.json
     return jsonify(generate_remediation_pdf(data, REPORTS_DIR))
 
+@app.route("/api/reports/generate-docx", methods=["POST"])
+def api_report_docx():
+    from modules.docx_reporter import generate_docx_report
+    data = request.json
+    return jsonify(generate_docx_report(data, REPORTS_DIR))
+
+@app.route("/api/reports/generate-remediation-docx", methods=["POST"])
+def api_remediation_docx():
+    from modules.docx_reporter import generate_remediation_docx
+    data = request.json
+    return jsonify(generate_remediation_docx(data, REPORTS_DIR))
+
 @app.route("/api/reports/download/<filename>")
 def api_report_download(filename):
     path = os.path.join(REPORTS_DIR, os.path.basename(filename))
     if os.path.exists(path):
-        mime = "application/pdf" if filename.endswith(".pdf") else "text/html"
+        ext  = os.path.splitext(filename)[1].lower()
+        mime = {"pdf":"application/pdf", ".docx":"application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".html":"text/html"}.get(ext, "application/octet-stream")
         return send_file(path, as_attachment=True, mimetype=mime)
     return jsonify({"error": "File not found"}), 404
 
