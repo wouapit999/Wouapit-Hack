@@ -3,7 +3,8 @@ import os
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
-REPORTS_DIR = os.path.join(os.path.dirname(__file__), "reports")
+# Vercel's filesystem is read-only except /tmp
+REPORTS_DIR = "/tmp/wouapit-reports" if os.environ.get("VERCEL") else os.path.join(os.path.dirname(__file__), "reports")
 
 # ── Routes ──────────────────────────────────────────────────────────────────
 
