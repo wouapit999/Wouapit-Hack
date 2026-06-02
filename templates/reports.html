@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block title %}Reports – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-file-alt" style="color:var(--accent)"></i> Report Generator{% endblock %}
+
+{% block content %}
+<div class="grid-2">
+  <!-- Report Builder -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-pen"></i> New Pentest Report</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Report Title</label>
+        <input type="text" id="r-title" class="form-control" placeholder="External Web Application Penetration Test">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Target</label>
+          <input type="text" id="r-target" class="form-control" placeholder="example.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Tester Name</label>
+          <input type="text" id="r-tester" class="form-control" placeholder="Security Team">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Engagement Type</label>
+          <select id="r-engtype" class="form-control">
+            <option>Black Box</option>
+            <option>Grey Box</option>
+            <option>White Box</option>
+            <option>Red Team</option>
+            <option>Internal Network</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Classification</label>
+          <select id="r-class" class="form-control">
+            <option>CONFIDENTIAL</option>
+            <option>RESTRICTED</option>
+            <option>INTERNAL</option>
+            <option>PUBLIC</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Executive Summary</label>
+        <textarea id="r-exec" class="form-control" rows="3" placeholder="Brief overview of the engagement and key findings…"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Tools Used</label>
+        <input type="text" id="r-tools" class="form-control" value="Wouapit-Hack, Nmap, Burp Suite, SQLMap, Nikto">
+      </div>
+    </div>
+
+    <!-- Findings -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-exclamation-triangle"></i> Findings</div>
+        <button class="btn btn-sm btn-secondary" onclick="addFinding()"><i class="fas fa-plus"></i> Add Finding</button>
+      </div>
+      <div id="findings-list"></div>
+      <div id="findings-empty" style="color:var(--muted);font-size:.88em;text-align:center;padding:20px">
+        No findings yet. Click "Add Finding" to add a vulnerability.
+      </div>
+    </div>
+
+    <!-- Recon Data -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-search"></i> Recon Data (optional)</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Open Ports (JSON array, optional)</label>
+        <textarea id="r-ports" class="form-control mono" rows="2" placeholder='[{"port":80,"state":"open","service":"http"},{"port":443,"state":"open","service":"https"}]'></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Subdomains Found (JSON array, optional)</label>
+        <textarea id="r-subs" class="form-control mono" rows="2" placeholder='[{"subdomain":"dev.example.com","ip":"1.2.3.4"}]'></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Technologies Detected (comma-separated)</label>
+        <input type="text" id="r-tech" class="form-control" placeholder="WordPress, Apache, PHP, jQuery">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Security Headers Status (JSON, optional)</label>
+        <textarea id="r-hdrs" class="form-control mono" rows="2" placeholder='{"Strict-Transport-Security":"MISSING","X-Frame-Options":"DENY"}'></textarea>
+      </div>
+    </div>
+
+    <button class="btn btn-primary btn-full" style="padding:14px" onclick="generateReport()">
+      <i class="fas fa-file-download"></i> Generate Professional Report
+    </button>
+    <div id="report-status" style="margin-top:12px"></div>
+  </div>
+
+  <!-- Saved Reports & Finding Template -->
+  <div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-folder-open"></i> Saved Reports</div>
+      </div>
+      {% if report_files %}
+        <ul style="list-style:none">
+          {% for f in report_files %}
+          <li style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border)">
+            <span style="font-size:.88em;color:var(--teal)"><i class="fas fa-file-code" style="margin-right:8px"></i>{{ f }}</span>
+            <a href="/api/reports/download/{{ f }}" class="btn btn-sm btn-secondary" download>
+              <i class="fas fa-download"></i> Download
+            </a>
+          </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p style="color:var(--muted);font-size:.88em;text-align:center;padding:20px">No reports generated yet.</p>
+      {% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-info-circle"></i> Severity Guide</div>
+      </div>
+      <ul class="checklist">
+        <li><span class="badge badge-critical">CRITICAL</span> <span style="margin-left:8px;font-size:.85em">Immediate exploitation, full compromise risk</span></li>
+        <li><span class="badge badge-high">HIGH</span> <span style="margin-left:8px;font-size:.85em">Significant security impact, patch within 24-72h</span></li>
+        <li><span class="badge badge-medium">MEDIUM</span> <span style="margin-left:8px;font-size:.85em">Moderate risk, patch within 30 days</span></li>
+        <li><span class="badge badge-low">LOW</span> <span style="margin-left:8px;font-size:.85em">Minor risk, address in next maintenance window</span></li>
+        <li><span class="badge badge-info">INFO</span> <span style="margin-left:8px;font-size:.85em">Informational, no direct security risk</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><i class="fas fa-lightbulb"></i> Report Tips</div>
+      </div>
+      <ul class="checklist">
+        <li class="pass"><i class="fas fa-check"></i> Include proof-of-concept steps</li>
+        <li class="pass"><i class="fas fa-check"></i> Attach screenshots as evidence</li>
+        <li class="pass"><i class="fas fa-check"></i> Rate CVSS scores accurately</li>
+        <li class="pass"><i class="fas fa-check"></i> Provide actionable remediation</li>
+        <li class="pass"><i class="fas fa-check"></i> Validate all findings before reporting</li>
+        <li class="pass"><i class="fas fa-check"></i> Reference CVE numbers where applicable</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- Finding Template (hidden) -->
+<template id="finding-tpl">
+  <div class="finding-item card" style="border-left:3px solid var(--accent);margin-bottom:12px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <strong style="color:var(--accent)">Finding #<span class="f-num"></span></strong>
+      <button class="btn btn-sm btn-secondary" onclick="removeFinding(this)"><i class="fas fa-trash"></i></button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Title</label>
+        <input type="text" class="form-control f-title" placeholder="SQL Injection in Login Form">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Severity</label>
+        <select class="form-control f-severity">
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH" selected>High</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+          <option value="INFO">Informational</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Description</label>
+      <textarea class="form-control f-desc" rows="2" placeholder="Detailed description of the vulnerability…"></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Location / URL</label>
+        <input type="text" class="form-control f-loc" placeholder="https://example.com/login">
+      </div>
+      <div class="form-group">
+        <label class="form-label">CVSS Score</label>
+        <input type="text" class="form-control f-cvss" placeholder="9.8">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Evidence / Proof of Concept</label>
+      <textarea class="form-control mono f-proof" rows="2" placeholder="Payload used, response snippet, steps to reproduce…"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Remediation</label>
+      <textarea class="form-control f-rem" rows="2" placeholder="Use parameterized queries / prepared statements…"></textarea>
+    </div>
+  </div>
+</template>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let findingCount = 0;
+
+function addFinding() {
+  findingCount++;
+  const tpl = document.getElementById('finding-tpl').content.cloneNode(true);
+  tpl.querySelector('.f-num').textContent = findingCount;
+  document.getElementById('findings-list').appendChild(tpl);
+  document.getElementById('findings-empty').style.display = 'none';
+}
+
+function removeFinding(btn) {
+  btn.closest('.finding-item').remove();
+  if (!document.querySelectorAll('.finding-item').length) {
+    document.getElementById('findings-empty').style.display = 'block';
+  }
+}
+
+function collectFindings() {
+  return Array.from(document.querySelectorAll('.finding-item')).map(el => ({
+    title:       el.querySelector('.f-title').value,
+    severity:    el.querySelector('.f-severity').value,
+    description: el.querySelector('.f-desc').value,
+    location:    el.querySelector('.f-loc').value,
+    cvss:        el.querySelector('.f-cvss').value,
+    proof:       el.querySelector('.f-proof').value,
+    remediation: el.querySelector('.f-rem').value,
+  }));
+}
+
+function tryJSON(val, fallback) {
+  try { return val.trim() ? JSON.parse(val) : fallback; }
+  catch { return fallback; }
+}
+
+async function generateReport() {
+  const status = document.getElementById('report-status');
+  status.innerHTML = '<span class="spinner"></span><span class="loading-text"> Generating report…</span>';
+
+  const techRaw = document.getElementById('r-tech').value;
+  const technologies = techRaw ? techRaw.split(',').map(s => s.trim()).filter(Boolean) : [];
+
+  const payload = {
+    title:             document.getElementById('r-title').value || 'Penetration Test Report',
+    target:            document.getElementById('r-target').value || 'Unknown',
+    tester:            document.getElementById('r-tester').value || 'Security Team',
+    engagement_type:   document.getElementById('r-engtype').value,
+    classification:    document.getElementById('r-class').value,
+    executive_summary: document.getElementById('r-exec').value,
+    tools_used:        document.getElementById('r-tools').value,
+    findings:          collectFindings(),
+    recon: {
+      open_ports:   tryJSON(document.getElementById('r-ports').value, []),
+      subdomains:   tryJSON(document.getElementById('r-subs').value, []),
+      technologies,
+      headers:      tryJSON(document.getElementById('r-hdrs').value, {}),
+    },
+  };
+
+  try {
+    const res  = await fetch('/api/reports/generate', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json();
+    if (data.success) {
+      status.innerHTML = `
+        <div class="alert alert-success">
+          <i class="fas fa-check-circle"></i>
+          <div>
+            Report generated: <strong>${escHtml(data.filename)}</strong>
+            (${data.summary.total_findings} findings)
+            <br><a href="/api/reports/download/${escHtml(data.filename)}" class="btn btn-sm btn-success" style="margin-top:8px" download>
+              <i class="fas fa-download"></i> Download Report
+            </a>
+          </div>
+        </div>`;
+    } else {
+      status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(data.error||'Unknown error')}</div>`;
+    }
+  } catch(e) {
+    status.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${escHtml(e.message)}</div>`;
+  }
+}
+</script>
+{% endblock %}

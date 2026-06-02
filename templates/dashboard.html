@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Dashboard – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-skull-crossbones" style="color:var(--accent)"></i> Wouapit-Hack{% endblock %}
+
+{% block content %}
+<div class="alert alert-danger">
+  <i class="fas fa-exclamation-triangle"></i>
+  <div><strong>Authorized Use Only.</strong> This tool is designed for legal penetration testing on systems you own or have explicit written permission to test. Unauthorized use is illegal.</div>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card">
+    <div class="stat-icon red"><i class="fas fa-crosshairs"></i></div>
+    <div class="stat-info"><div class="number">6</div><div class="label">Tool Categories</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon teal"><i class="fas fa-search"></i></div>
+    <div class="stat-info"><div class="number">5</div><div class="label">Recon Tools</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon green"><i class="fas fa-globe"></i></div>
+    <div class="stat-info"><div class="number">5</div><div class="label">Web Scanner Tools</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon orange"><i class="fas fa-key"></i></div>
+    <div class="stat-info"><div class="number">4</div><div class="label">Password Tools</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon blue"><i class="fas fa-bug"></i></div>
+    <div class="stat-info"><div class="number">8</div><div class="label">Payload Types</div></div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-icon purple"><i class="fas fa-file-pdf"></i></div>
+    <div class="stat-info"><div class="number">∞</div><div class="label">Professional Reports</div></div>
+  </div>
+</div>
+
+<div class="grid-2">
+  <!-- Quick Actions -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-bolt"></i> Quick Actions</div>
+    </div>
+    <div class="quick-actions">
+      <a class="quick-btn" href="/recon"><i class="fas fa-dns"></i>DNS Lookup</a>
+      <a class="quick-btn" href="/recon"><i class="fas fa-ethernet"></i>Port Scan</a>
+      <a class="quick-btn" href="/web-scanner"><i class="fas fa-folder-open"></i>Dir Brute</a>
+      <a class="quick-btn" href="/web-scanner"><i class="fas fa-shield-alt"></i>SSL Check</a>
+      <a class="quick-btn" href="/passwords"><i class="fas fa-fingerprint"></i>Hash ID</a>
+      <a class="quick-btn" href="/exploits"><i class="fas fa-terminal"></i>Payloads</a>
+      <a class="quick-btn" href="/network"><i class="fas fa-satellite-dish"></i>Ping Sweep</a>
+      <a class="quick-btn" href="/reports"><i class="fas fa-file-alt"></i>New Report</a>
+    </div>
+  </div>
+
+  <!-- Tool Overview -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><i class="fas fa-layer-group"></i> Tool Coverage</div>
+    </div>
+    <ul class="checklist">
+      <li class="pass"><i class="fas fa-check-circle"></i> DNS, WHOIS, subdomain enumeration</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> TCP port scanning (multi-threaded)</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> HTTP header &amp; security analysis</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Directory &amp; file bruteforce</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> SQL injection detection</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> XSS reflected detection</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> SSL/TLS certificate analysis</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Technology fingerprinting</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Ping sweep &amp; traceroute</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Banner grabbing</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Hash identification &amp; cracking</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Password generation &amp; encoding</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> CVE lookup (NVD/MITRE)</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Reverse shell / web shell payloads</li>
+      <li class="pass"><i class="fas fa-check-circle"></i> Professional HTML pentest reports</li>
+    </ul>
+  </div>
+</div>
+
+<!-- All Tools Grid -->
+<div class="section-title" style="margin-top:8px"><i class="fas fa-tools"></i> All Tools</div>
+<div class="tool-grid">
+  <a class="tool-card" href="/recon">
+    <div class="tool-card-icon"><i class="fas fa-search"></i></div>
+    <h3>Reconnaissance Suite</h3>
+    <p>DNS lookup, WHOIS, subdomain enumeration, port scanning, and HTTP header analysis.</p>
+  </a>
+  <a class="tool-card" href="/web-scanner">
+    <div class="tool-card-icon"><i class="fas fa-globe"></i></div>
+    <h3>Web Application Scanner</h3>
+    <p>Directory brute force, SQLi &amp; XSS detection, SSL analysis, tech fingerprinting.</p>
+  </a>
+  <a class="tool-card" href="/network">
+    <div class="tool-card-icon"><i class="fas fa-network-wired"></i></div>
+    <h3>Network Tools</h3>
+    <p>Ping sweep across CIDR ranges, traceroute, and banner grabbing.</p>
+  </a>
+  <a class="tool-card" href="/passwords">
+    <div class="tool-card-icon"><i class="fas fa-key"></i></div>
+    <h3>Password Tools</h3>
+    <p>Hash identification, dictionary cracking, secure password generation, encoder/decoder.</p>
+  </a>
+  <a class="tool-card" href="/exploits">
+    <div class="tool-card-icon"><i class="fas fa-bug"></i></div>
+    <h3>Exploits &amp; Payloads</h3>
+    <p>CVE lookup via NVD, reverse/bind shell generators, web shells, XSS &amp; SQLi payloads.</p>
+  </a>
+  <a class="tool-card" href="/reports">
+    <div class="tool-card-icon"><i class="fas fa-file-alt"></i></div>
+    <h3>Report Generator</h3>
+    <p>Build professional HTML pentest reports with findings, severity ratings, and recommendations.</p>
+  </a>
+</div>
+{% endblock %}

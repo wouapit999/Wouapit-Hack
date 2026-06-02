@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Wouapit-Hack{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">
+      <i class="fas fa-skull-crossbones"></i>
+      <span>Wouapit-Hack</span>
+    </div>
+    <button class="sidebar-toggle" id="sidebarToggle"><i class="fas fa-bars"></i></button>
+  </div>
+
+  <ul class="nav-menu">
+    <li class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <a href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
+    </li>
+    <li class="nav-section"><span>RECONNAISSANCE</span></li>
+    <li class="nav-item {% if request.endpoint == 'recon' %}active{% endif %}">
+      <a href="{{ url_for('recon') }}"><i class="fas fa-search"></i><span>Recon Suite</span></a>
+    </li>
+    <li class="nav-section"><span>SCANNING</span></li>
+    <li class="nav-item {% if request.endpoint == 'web_scanner' %}active{% endif %}">
+      <a href="{{ url_for('web_scanner') }}"><i class="fas fa-globe"></i><span>Web Scanner</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'network' %}active{% endif %}">
+      <a href="{{ url_for('network') }}"><i class="fas fa-network-wired"></i><span>Network Tools</span></a>
+    </li>
+    <li class="nav-section"><span>EXPLOITATION</span></li>
+    <li class="nav-item {% if request.endpoint == 'passwords' %}active{% endif %}">
+      <a href="{{ url_for('passwords') }}"><i class="fas fa-key"></i><span>Password Tools</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'exploits' %}active{% endif %}">
+      <a href="{{ url_for('exploits') }}"><i class="fas fa-bug"></i><span>Exploits &amp; Payloads</span></a>
+    </li>
+    <li class="nav-section"><span>REPORTING</span></li>
+    <li class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
+      <a href="{{ url_for('reports') }}"><i class="fas fa-file-alt"></i><span>Reports</span></a>
+    </li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <span class="status-dot"></span> Authorized Testing Only
+  </div>
+</nav>
+
+<!-- Main Content -->
+<div class="main" id="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle-mobile" id="sidebarToggleMobile"><i class="fas fa-bars"></i></button>
+      <h1 class="page-title">{% block page_title %}Dashboard{% endblock %}</h1>
+    </div>
+    <div class="topbar-right">
+      <span class="badge-warning"><i class="fas fa-shield-alt"></i> Authorized Use Only</span>
+    </div>
+  </header>
+
+  <div class="content">
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

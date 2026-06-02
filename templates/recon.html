@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Recon Suite – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-search" style="color:var(--accent)"></i> Reconnaissance Suite{% endblock %}
+
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tab-dns">DNS Lookup</button>
+    <button class="tab-btn" data-tab="tab-whois">WHOIS</button>
+    <button class="tab-btn" data-tab="tab-ports">Port Scan</button>
+    <button class="tab-btn" data-tab="tab-sub">Subdomains</button>
+    <button class="tab-btn" data-tab="tab-headers">HTTP Headers</button>
+  </div>
+
+  <!-- DNS -->
+  <div class="tab-panel active" id="tab-dns" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target Domain / IP</label>
+      <input type="text" id="dns-target" class="form-control" placeholder="example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runDNS()"><i class="fas fa-search"></i> Run DNS Lookup</button>
+    <div class="output-box" id="dns-out" style="margin-top:16px">
+      <span class="output-placeholder">DNS results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- WHOIS -->
+  <div class="tab-panel" id="tab-whois" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Domain / IP</label>
+      <input type="text" id="whois-target" class="form-control" placeholder="example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runWHOIS()"><i class="fas fa-id-card"></i> Run WHOIS</button>
+    <div class="output-box" id="whois-out" style="margin-top:16px">
+      <span class="output-placeholder">WHOIS data will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- Port Scan -->
+  <div class="tab-panel" id="tab-ports" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Target Host / IP</label>
+        <input type="text" id="port-target" class="form-control" placeholder="192.168.1.1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Port Range</label>
+        <input type="text" id="port-range" class="form-control" placeholder="1-1024  or  22,80,443,8080">
+      </div>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px">
+      <i class="fas fa-info-circle"></i> Max 2000 ports per scan. Common ranges: <code>1-1024</code> | <code>1-65535</code> | <code>22,80,443,3306,8080,8443</code>
+    </div>
+    <button class="btn btn-primary" onclick="runPortScan()"><i class="fas fa-ethernet"></i> Start Port Scan</button>
+    <div class="output-box" id="port-out" style="margin-top:16px">
+      <span class="output-placeholder">Port scan results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- Subdomains -->
+  <div class="tab-panel" id="tab-sub" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target Domain</label>
+      <input type="text" id="sub-target" class="form-control" placeholder="example.com">
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px">
+      <i class="fas fa-info-circle"></i> Checks 50+ common subdomain prefixes via DNS resolution.
+    </div>
+    <button class="btn btn-primary" onclick="runSubdomains()"><i class="fas fa-sitemap"></i> Enumerate Subdomains</button>
+    <div class="output-box" id="sub-out" style="margin-top:16px">
+      <span class="output-placeholder">Subdomain results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- HTTP Headers -->
+  <div class="tab-panel" id="tab-headers" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target URL</label>
+      <input type="text" id="hdr-target" class="form-control" placeholder="https://example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runHeaders()"><i class="fas fa-shield-alt"></i> Analyze Headers</button>
+    <div class="output-box" id="hdr-out" style="margin-top:16px">
+      <span class="output-placeholder">Header analysis will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runDNS() {
+  const t = document.getElementById('dns-target').value.trim();
+  if (!t) return alert('Enter a target.');
+  const out = document.getElementById('dns-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Querying DNS…</span>';
+  const data = await apiPost('/api/recon/dns', {target: t});
+  renderDNS(out, data);
+}
+async function runWHOIS() {
+  const t = document.getElementById('whois-target').value.trim();
+  if (!t) return alert('Enter a target.');
+  const out = document.getElementById('whois-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Fetching WHOIS…</span>';
+  const data = await apiPost('/api/recon/whois', {target: t});
+  renderJSON(out, data, 'WHOIS Results');
+}
+async function runPortScan() {
+  const t = document.getElementById('port-target').value.trim();
+  const p = document.getElementById('port-range').value.trim() || '1-1024';
+  if (!t) return alert('Enter a target.');
+  const out = document.getElementById('port-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Scanning ports… (this may take a moment)</span>';
+  const data = await apiPost('/api/recon/portscan', {target: t, ports: p});
+  renderPortScan(out, data);
+}
+async function runSubdomains() {
+  const t = document.getElementById('sub-target').value.trim();
+  if (!t) return alert('Enter a domain.');
+  const out = document.getElementById('sub-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Enumerating subdomains…</span>';
+  const data = await apiPost('/api/recon/subdomain', {target: t});
+  renderSubdomains(out, data);
+}
+async function runHeaders() {
+  const t = document.getElementById('hdr-target').value.trim();
+  if (!t) return alert('Enter a URL.');
+  const out = document.getElementById('hdr-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Fetching headers…</span>';
+  const data = await apiPost('/api/recon/headers', {target: t});
+  renderHeaders(out, data);
+}
+</script>
+{% endblock %}

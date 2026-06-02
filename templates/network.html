@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Network Tools – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-network-wired" style="color:var(--accent)"></i> Network Tools{% endblock %}
+
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="net-ping">Ping Sweep</button>
+    <button class="tab-btn" data-tab="net-trace">Traceroute</button>
+    <button class="tab-btn" data-tab="net-banner">Banner Grab</button>
+  </div>
+
+  <!-- Ping Sweep -->
+  <div class="tab-panel active" id="net-ping" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">CIDR Range / Single Host</label>
+      <input type="text" id="ping-target" class="form-control" placeholder="192.168.1.0/24  or  10.0.0.1">
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px">
+      <i class="fas fa-info-circle"></i> Scans up to 254 hosts in a /24. Uses ICMP ping with multithreading.
+    </div>
+    <button class="btn btn-primary" onclick="runPingSweep()"><i class="fas fa-satellite-dish"></i> Start Ping Sweep</button>
+    <div class="output-box" id="ping-out" style="margin-top:16px">
+      <span class="output-placeholder">Ping sweep results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- Traceroute -->
+  <div class="tab-panel" id="net-trace" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target Host / IP</label>
+      <input type="text" id="trace-target" class="form-control" placeholder="8.8.8.8  or  example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runTraceroute()"><i class="fas fa-route"></i> Run Traceroute</button>
+    <div class="output-box" id="trace-out" style="margin-top:16px">
+      <span class="output-placeholder">Traceroute results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- Banner Grab -->
+  <div class="tab-panel" id="net-banner" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Target Host</label>
+        <input type="text" id="banner-host" class="form-control" placeholder="192.168.1.1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Port</label>
+        <input type="number" id="banner-port" class="form-control" value="80" min="1" max="65535">
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="runBanner()"><i class="fas fa-terminal"></i> Grab Banner</button>
+    <div class="output-box" id="banner-out" style="margin-top:16px">
+      <span class="output-placeholder">Banner grab result will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runPingSweep() {
+  const t = document.getElementById('ping-target').value.trim();
+  if (!t) return alert('Enter a CIDR or host.');
+  const out = document.getElementById('ping-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Sweeping hosts…</span>';
+  const data = await apiPost('/api/network/ping', {target: t});
+  if (data.error) { out.innerHTML = `<span class="output-line error">✗ ${escHtml(data.error)}</span>`; return; }
+  let html = `<span class="output-line heading">Ping Sweep: ${escHtml(t)}</span>\n`;
+  html += `<span class="output-line info">Scanned: ${data.total_scanned} | Up: ${data.up_count}</span>\n\n`;
+  if (data.hosts_up?.length) {
+    html += '<table class="data-table"><thead><tr><th>IP</th><th>Status</th><th>Hostname</th></tr></thead><tbody>';
+    data.hosts_up.forEach(h => {
+      html += `<tr><td>${escHtml(h.ip)}</td><td><span class="badge badge-open">UP</span></td><td>${escHtml(h.hostname||'')}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  } else {
+    html += '<span class="output-line warning">No hosts responded.</span>';
+  }
+  out.innerHTML = html;
+}
+async function runTraceroute() {
+  const t = document.getElementById('trace-target').value.trim();
+  if (!t) return alert('Enter a target.');
+  const out = document.getElementById('trace-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Tracing route… (up to 30s)</span>';
+  const data = await apiPost('/api/network/traceroute', {target: t});
+  if (data.error) { out.innerHTML = `<span class="output-line error">✗ ${escHtml(data.error)}</span>`; return; }
+  let html = `<span class="output-line heading">Traceroute: ${escHtml(t)} (${escHtml(data.ip||'')})</span>\n\n`;
+  if (data.hops?.length) {
+    html += '<table class="data-table"><thead><tr><th>#</th><th>IP</th><th>Raw</th></tr></thead><tbody>';
+    data.hops.forEach(h => {
+      html += `<tr><td>${h.hop}</td><td>${escHtml(h.ip)}</td><td>${escHtml(h.raw)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+  } else {
+    html += '<span class="output-line warning">No hops captured.</span>';
+  }
+  out.innerHTML = html;
+}
+async function runBanner() {
+  const h = document.getElementById('banner-host').value.trim();
+  const p = document.getElementById('banner-port').value;
+  if (!h) return alert('Enter a host.');
+  const out = document.getElementById('banner-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Grabbing banner…</span>';
+  const data = await apiPost('/api/network/banner', {target: h, port: parseInt(p)});
+  if (data.error) { out.innerHTML = `<span class="output-line error">✗ ${escHtml(data.error)}</span>`; return; }
+  let html = `<span class="output-line heading">Banner Grab: ${escHtml(h)}:${escHtml(String(p))}</span>\n\n`;
+  if (data.banner) {
+    html += `<span class="output-line success">Banner received:</span>\n`;
+    html += `<pre style="background:none;padding:0;color:#a8dadc">${escHtml(data.banner)}</pre>`;
+  } else {
+    html += '<span class="output-line warning">No banner received (port may be closed or filtered).</span>';
+  }
+  out.innerHTML = html;
+}
+</script>
+{% endblock %}

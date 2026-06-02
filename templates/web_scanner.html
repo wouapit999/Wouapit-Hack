@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Web Scanner – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-globe" style="color:var(--accent)"></i> Web Application Scanner{% endblock %}
+
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ws-dir">Dir Bruteforce</button>
+    <button class="tab-btn" data-tab="ws-sqli">SQL Injection</button>
+    <button class="tab-btn" data-tab="ws-xss">XSS Tester</button>
+    <button class="tab-btn" data-tab="ws-ssl">SSL/TLS</button>
+    <button class="tab-btn" data-tab="ws-tech">Tech Detect</button>
+  </div>
+
+  <!-- Dir Brute -->
+  <div class="tab-panel active" id="ws-dir" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Target URL</label>
+        <input type="text" id="dir-target" class="form-control" placeholder="https://example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Wordlist</label>
+        <select id="dir-wl" class="form-control">
+          <option value="common">Common (50+ paths)</option>
+        </select>
+      </div>
+    </div>
+    <div class="alert alert-warning" style="margin-bottom:12px">
+      <i class="fas fa-exclamation-triangle"></i> Only use against targets you are authorized to test.
+    </div>
+    <button class="btn btn-primary" onclick="runDirBrute()"><i class="fas fa-folder-open"></i> Start Bruteforce</button>
+    <div class="output-box" id="dir-out" style="margin-top:16px">
+      <span class="output-placeholder">Directory bruteforce results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- SQLi -->
+  <div class="tab-panel" id="ws-sqli" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target URL (with or without parameters)</label>
+      <input type="text" id="sqli-target" class="form-control" placeholder="https://example.com/page?id=1">
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px">
+      <i class="fas fa-info-circle"></i> Tests for common SQL injection error signatures. Appends test payloads as query parameters.
+    </div>
+    <button class="btn btn-primary" onclick="runSQLi()"><i class="fas fa-database"></i> Test SQL Injection</button>
+    <div class="output-box" id="sqli-out" style="margin-top:16px">
+      <span class="output-placeholder">SQL injection test results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- XSS -->
+  <div class="tab-panel" id="ws-xss" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target URL</label>
+      <input type="text" id="xss-target" class="form-control" placeholder="https://example.com/search?q=test">
+    </div>
+    <div class="alert alert-info" style="margin-bottom:12px">
+      <i class="fas fa-info-circle"></i> Tests for reflected XSS by injecting payloads into URL parameters and checking if they appear in the response.
+    </div>
+    <button class="btn btn-primary" onclick="runXSS()"><i class="fas fa-code"></i> Test XSS</button>
+    <div class="output-box" id="xss-out" style="margin-top:16px">
+      <span class="output-placeholder">XSS test results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- SSL -->
+  <div class="tab-panel" id="ws-ssl" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Host / Domain</label>
+      <input type="text" id="ssl-target" class="form-control" placeholder="example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runSSL()"><i class="fas fa-lock"></i> Analyze SSL/TLS</button>
+    <div class="output-box" id="ssl-out" style="margin-top:16px">
+      <span class="output-placeholder">SSL/TLS analysis will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+
+  <!-- Tech Detect -->
+  <div class="tab-panel" id="ws-tech" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Target URL</label>
+      <input type="text" id="tech-target" class="form-control" placeholder="https://example.com">
+    </div>
+    <button class="btn btn-primary" onclick="runTech()"><i class="fas fa-microchip"></i> Detect Technologies</button>
+    <div class="output-box" id="tech-out" style="margin-top:16px">
+      <span class="output-placeholder">Technology detection results will appear here…</span>
+      <button class="copy-btn">📋 Copy</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function runDirBrute() {
+  const t = document.getElementById('dir-target').value.trim();
+  const wl = document.getElementById('dir-wl').value;
+  if (!t) return alert('Enter a URL.');
+  const out = document.getElementById('dir-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Bruteforcing directories…</span>';
+  const data = await apiPost('/api/web/dirbrute', {target: t, wordlist: wl});
+  if (data.error) { out.innerHTML = `<span class="output-line error">✗ ${escHtml(data.error)}</span>`; return; }
+  let html = `<span class="output-line heading">Directory Bruteforce: ${escHtml(t)}</span>\n`;
+  html += `<span class="output-line info">Scanned: ${data.scanned} paths | Found: ${data.count}</span>\n\n`;
+  if (data.found?.length) {
+    html += '<table class="data-table"><thead><tr><th>URL</th><th>Status</th><th>Size</th></tr></thead><tbody>';
+    data.found.forEach(f => {
+      const cls = f.status < 300 ? 'success' : f.status < 400 ? 'warning' : '';
+      html += `<tr><td>${escHtml(f.url)}</td><td style="color:var(--${cls||'text'})">${f.status}</td><td>${f.size}B</td></tr>`;
+    });
+    html += '</tbody></table>';
+  } else {
+    html += '<span class="output-line warning">No paths found.</span>';
+  }
+  out.innerHTML = html;
+}
+async function runSQLi() {
+  const t = document.getElementById('sqli-target').value.trim();
+  if (!t) return alert('Enter a URL.');
+  const out = document.getElementById('sqli-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Testing SQL injection…</span>';
+  const data = await apiPost('/api/web/sqli', {target: t});
+  renderVulns(out, data, 'SQL Injection Test');
+}
+async function runXSS() {
+  const t = document.getElementById('xss-target').value.trim();
+  if (!t) return alert('Enter a URL.');
+  const out = document.getElementById('xss-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Testing XSS…</span>';
+  const data = await apiPost('/api/web/xss', {target: t});
+  renderVulns(out, data, 'XSS Test');
+}
+async function runSSL() {
+  const t = document.getElementById('ssl-target').value.trim();
+  if (!t) return alert('Enter a host.');
+  const out = document.getElementById('ssl-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Analyzing SSL/TLS…</span>';
+  const data = await apiPost('/api/web/ssl', {target: t});
+  renderSSL(out, data);
+}
+async function runTech() {
+  const t = document.getElementById('tech-target').value.trim();
+  if (!t) return alert('Enter a URL.');
+  const out = document.getElementById('tech-out');
+  out.innerHTML = '<span class="spinner"></span><span class="loading-text"> Fingerprinting…</span>';
+  const data = await apiPost('/api/web/techdetect', {target: t});
+  if (data.error) { out.innerHTML = `<span class="output-line error">✗ ${escHtml(data.error)}</span>`; return; }
+  let html = `<span class="output-line heading">Technology Detection: ${escHtml(t)}</span>\n\n`;
+  html += `<span class="output-line info">Status: ${data.status_code}</span>\n`;
+  html += `<span class="output-line info">Server: ${escHtml(data.server||'')}</span>\n`;
+  html += `<span class="output-line info">Powered By: ${escHtml(data.powered_by||'')}</span>\n\n`;
+  if (data.technologies?.length) {
+    html += '<span class="output-line heading">Detected Technologies:</span>\n';
+    data.technologies.forEach(t2 => { html += `  <span class="output-line success">✓ ${escHtml(t2)}</span>\n`; });
+  } else {
+    html += '<span class="output-line warning">No known technologies detected.</span>\n';
+  }
+  out.innerHTML = html;
+}
+</script>
+{% endblock %}
