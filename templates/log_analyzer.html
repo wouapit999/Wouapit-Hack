@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Log Analyzer – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-chart-bar" style="color:var(--accent)"></i> Log &amp; SIEM Analysis{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><div class="card-title"><i class="fas fa-upload"></i> Log Input</div></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">Log Type</label>
+      <select id="log-type" class="form-control">
+        <option value="auto">Auto-detect</option>
+        <option value="apache/nginx">Apache / Nginx</option>
+        <option value="syslog">Syslog / SSH</option>
+      </select></div>
+    <div class="form-group" style="display:flex;align-items:flex-end">
+      <label class="btn btn-secondary" style="cursor:pointer;margin:0"><i class="fas fa-file"></i> Upload Log
+        <input type="file" id="log-file" style="display:none" accept=".log,.txt" onchange="loadLog(this)"></label></div>
+  </div>
+  <div class="form-group"><label class="form-label">Paste Log Content</label>
+    <textarea id="log-input" class="form-control mono" rows="10" placeholder='192.168.1.1 - - [01/Jan/2026:12:00:00 +0000] "GET /admin HTTP/1.1" 401 0 "-" "Mozilla/5.0"'></textarea></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn btn-primary" onclick="analyzeLog()"><i class="fas fa-search"></i> Detect Anomalies</button>
+    <button class="btn btn-secondary" onclick="enrichIPs()"><i class="fas fa-globe"></i> Enrich Top IPs</button>
+  </div>
+</div>
+<div id="log-result"></div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function loadLog(input){
+  const f=input.files[0];if(!f)return;
+  if(f.size>5*1024*1024)return alert('Log too large (5MB max).');
+  const r=new FileReader();r.onload=e=>{document.getElementById('log-input').value=e.target.result;};r.readAsText(f);
+}
+async function analyzeLog(){
+  const text=document.getElementById('log-input').value.trim();if(!text)return alert('Paste logs.');
+  const c=document.getElementById('log-result');c.innerHTML='<div class="card"><span class="spinner"></span> Analyzing…</div>';
+  const data=await apiPost('/api/logs/analyze',{log_text:text,log_type:document.getElementById('log-type').value});
+  const s=data.statistics||{};
+  c.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon teal"><i class="fas fa-list"></i></div><div class="stat-info"><div class="number">${(s.total_requests||s.total_events||0).toLocaleString()}</div><div class="label">Total Entries</div></div></div>
+    <div class="stat-card"><div class="stat-icon blue"><i class="fas fa-globe"></i></div><div class="stat-info"><div class="number">${s.unique_ips||0}</div><div class="label">Unique IPs</div></div></div>
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-info"><div class="number">${(data.anomalies||[]).length}</div><div class="label">Anomalies</div></div></div>
+    ${s['4xx_errors']!==undefined?`<div class="stat-card"><div class="stat-icon orange"><i class="fas fa-times-circle"></i></div><div class="stat-info"><div class="number">${s['4xx_errors']}</div><div class="label">4xx Errors</div></div></div>`:''}
+    ${s.ssh_failures!==undefined?`<div class="stat-card"><div class="stat-icon red"><i class="fas fa-user-lock"></i></div><div class="stat-info"><div class="number">${s.ssh_failures}</div><div class="label">SSH Failures</div></div></div>`:''}
+  </div>
+  ${(data.anomalies||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-exclamation-triangle"></i> Detected Anomalies</div>
+    ${data.anomalies.map(a=>`<div style="padding:12px;background:var(--surface2);margin:8px 0;border-left:3px solid ${a.severity==='CRITICAL'?'var(--critical)':a.severity==='HIGH'?'var(--danger)':'var(--warning)'};border-radius:4px;font-size:.88em">
+      <strong>${esc(a.type)}</strong> <span class="badge badge-${a.severity.toLowerCase()}">${esc(a.severity)}</span>
+      <div style="margin-top:6px">${esc(a.message||'')}</div>
+      ${a.ip?`<div class="mono" style="font-size:.85em;margin-top:4px">IP: ${esc(a.ip)} (${a.count||0} events)</div>`:''}
+      ${a.ips?`<div class="mono" style="font-size:.8em;margin-top:4px">IPs: ${esc((a.ips||[]).join(', '))}</div>`:''}
+      ${a.paths?`<div class="mono" style="font-size:.78em;margin-top:4px;color:var(--muted)">Paths: ${esc((a.paths||[]).slice(0,5).join(', '))}</div>`:''}
+    </div>`).join('')}</div>`:'<div class="alert alert-success"><i class="fas fa-check-circle"></i> No anomalies detected</div>'}
+  ${(data.top_ips||[]).length?`<div class="grid-2">
+    <div class="card"><div class="card-title">Top IPs</div><table class="data-table" style="margin-top:8px"><tr><th>IP</th><th>${data.top_ips[0].failures!==undefined?'Failures':'Count'}</th></tr>${data.top_ips.map(i=>`<tr><td class="mono">${esc(i.ip)}</td><td>${i.count||i.failures||0}</td></tr>`).join('')}</table></div>
+    ${(data.top_paths||[]).length?`<div class="card"><div class="card-title">Top Paths</div><table class="data-table" style="margin-top:8px"><tr><th>Path</th><th>Hits</th></tr>${data.top_paths.map(p=>`<tr><td class="mono">${esc(p.path)}</td><td>${p.count}</td></tr>`).join('')}</table></div>`:''}
+  </div>`:''}`;
+}
+async function enrichIPs(){
+  const text=document.getElementById('log-input').value.trim();if(!text)return alert('Paste logs.');
+  const c=document.getElementById('log-result');c.innerHTML='<div class="card"><span class="spinner"></span> Looking up GeoIP…</div>';
+  const data=await apiPost('/api/logs/enrich-ips',{log_text:text});
+  c.innerHTML=`<div class="card"><div class="card-title"><i class="fas fa-globe"></i> Top IPs Enriched</div>
+    <table class="data-table"><tr><th>IP</th><th>Count</th><th>Country</th><th>City</th><th>Org</th></tr>
+    ${(data.enriched||[]).map(e=>`<tr><td class="mono">${esc(e.ip)}</td><td>${e.count}</td><td>${esc(e.country||'?')}</td><td>${esc(e.city||'?')}</td><td>${esc(e.org||'?')}</td></tr>`).join('')}</table></div>`;
+}
+</script>
+{% endblock %}

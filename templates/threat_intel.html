@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Threat Intelligence – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-satellite" style="color:var(--accent)"></i> Threat Intelligence{% endblock %}
+{% block content %}
+<div class="card">
+  <div class="card-header"><div class="card-title"><i class="fas fa-key"></i> API Keys (optional — improves results)</div></div>
+  <div class="form-row">
+    <div class="form-group"><label class="form-label">AbuseIPDB Key</label><input type="password" id="key-abuseipdb" class="form-control" placeholder="abuseipdb.com/api"></div>
+    <div class="form-group"><label class="form-label">VirusTotal Key</label><input type="password" id="key-virustotal" class="form-control" placeholder="virustotal.com"></div>
+    <div class="form-group"><label class="form-label">HIBP Key</label><input type="password" id="key-hibp" class="form-control"></div>
+  </div>
+</div>
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ti-ip">IP Reputation</button>
+    <button class="tab-btn" data-tab="ti-domain">Domain Reputation</button>
+    <button class="tab-btn" data-tab="ti-ioc">IOC Lookup</button>
+    <button class="tab-btn" data-tab="ti-feeds">Threat Feeds</button>
+  </div>
+  <div class="tab-panel active" id="ti-ip" style="padding:20px">
+    <div class="form-group"><label class="form-label">IP Address</label><input type="text" id="ti-ip-input" class="form-control mono" placeholder="8.8.8.8"></div>
+    <button class="btn btn-primary" onclick="tiIp()"><i class="fas fa-search"></i> Check IP</button>
+    <div id="ti-ip-out" style="margin-top:16px"></div>
+  </div>
+  <div class="tab-panel" id="ti-domain" style="padding:20px">
+    <div class="form-group"><label class="form-label">Domain</label><input type="text" id="ti-dom-input" class="form-control" placeholder="example.com"></div>
+    <button class="btn btn-primary" onclick="tiDom()"><i class="fas fa-globe"></i> Check Domain</button>
+    <div id="ti-dom-out" style="margin-top:16px"></div>
+  </div>
+  <div class="tab-panel" id="ti-ioc" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">IOC (any type)</label><input type="text" id="ti-ioc-input" class="form-control mono" placeholder="IP / domain / URL / hash / email"></div>
+      <div class="form-group"><label class="form-label">Type</label>
+        <select id="ti-ioc-type" class="form-control"><option>auto</option><option>ip</option><option>domain</option><option>hash</option><option>url</option><option>email</option></select></div>
+    </div>
+    <button class="btn btn-primary" onclick="tiIoc()"><i class="fas fa-fingerprint"></i> Look Up IOC</button>
+    <div class="output-box" id="ti-ioc-out" style="margin-top:16px"><span class="output-placeholder">IOC verdict…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+  <div class="tab-panel" id="ti-feeds" style="padding:20px">
+    <div class="form-group"><label class="form-label">Indicator (IP, domain, hash)</label><input type="text" id="ti-fd-input" class="form-control mono"></div>
+    <button class="btn btn-primary" onclick="tiFeeds()"><i class="fas fa-rss"></i> Check Threat Feeds</button>
+    <div class="output-box" id="ti-fd-out" style="margin-top:16px"><span class="output-placeholder">URLhaus, ThreatFox, MalwareBazaar…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function getKeys(){return {abuseipdb:document.getElementById('key-abuseipdb').value,virustotal:document.getElementById('key-virustotal').value,hibp:document.getElementById('key-hibp').value};}
+function renderRep(c,data){
+  const vc=data.verdict==='MALICIOUS'?'var(--danger)':data.verdict==='SUSPICIOUS'?'var(--warning)':'var(--success)';
+  c.innerHTML=`<div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-skull-crossbones"></i></div><div class="stat-info"><div class="number" style="color:${vc}">${esc(data.verdict||'?')}</div><div class="label">Verdict</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-thermometer-half"></i></div><div class="stat-info"><div class="number">${data.risk_score||0}/100</div><div class="label">Risk Score</div></div></div>
+    ${data.geo?`<div class="stat-card"><div class="stat-icon teal"><i class="fas fa-map-marker-alt"></i></div><div class="stat-info"><div class="number" style="font-size:1em">${esc(data.geo.country||'?')}</div><div class="label">${esc(data.geo.city||'')}</div></div></div>`:''}
+  </div>
+  ${Object.entries(data.sources||{}).map(([k,v])=>`<div class="card"><div class="card-title"><i class="fas fa-database"></i> ${esc(k)}</div><pre style="background:none;padding:10px;font-size:.78em;color:var(--teal);margin-top:8px">${esc(JSON.stringify(v,null,2))}</pre></div>`).join('')}`;
+}
+async function tiIp(){
+  const ip=document.getElementById('ti-ip-input').value.trim();if(!ip)return alert('Enter IP.');
+  const c=document.getElementById('ti-ip-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  renderRep(c,await apiPost('/api/intel/ip',{ip,keys:getKeys()}));
+}
+async function tiDom(){
+  const d=document.getElementById('ti-dom-input').value.trim();if(!d)return alert('Enter domain.');
+  const c=document.getElementById('ti-dom-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  renderRep(c,await apiPost('/api/intel/domain',{domain:d,keys:getKeys()}));
+}
+async function tiIoc(){
+  const ioc=document.getElementById('ti-ioc-input').value.trim();if(!ioc)return alert('Enter IOC.');
+  const out=document.getElementById('ti-ioc-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/intel/ioc',{ioc,type:document.getElementById('ti-ioc-type').value,keys:getKeys()});
+  renderJSON(out,data,`IOC: ${ioc}`);
+}
+async function tiFeeds(){
+  const i=document.getElementById('ti-fd-input').value.trim();if(!i)return alert('Enter indicator.');
+  const out=document.getElementById('ti-fd-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/intel/feeds',{indicator:i});
+  renderJSON(out,data,`Threat Feeds: ${i}`);
+}
+</script>
+{% endblock %}

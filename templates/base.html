@@ -49,6 +49,37 @@
     <li class="nav-item {% if request.endpoint == 'exploits' %}active{% endif %}">
       <a href="{{ url_for('exploits') }}"><i class="fas fa-bug"></i><span>Exploits &amp; Payloads</span></a>
     </li>
+    <li class="nav-section"><span>VULNERABILITY</span></li>
+    <li class="nav-item {% if request.endpoint == 'vuln_management' %}active{% endif %}">
+      <a href="{{ url_for('vuln_management') }}"><i class="fas fa-shield-virus"></i><span>Vuln Management</span></a>
+    </li>
+    <li class="nav-section"><span>INTELLIGENCE</span></li>
+    <li class="nav-item {% if request.endpoint == 'osint_page' %}active{% endif %}">
+      <a href="{{ url_for('osint_page') }}"><i class="fas fa-user-secret"></i><span>OSINT Intel</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'threat_intel_page' %}active{% endif %}">
+      <a href="{{ url_for('threat_intel_page') }}"><i class="fas fa-satellite"></i><span>Threat Intel</span></a>
+    </li>
+    <li class="nav-section"><span>ANALYSIS</span></li>
+    <li class="nav-item {% if request.endpoint == 'malware_page' %}active{% endif %}">
+      <a href="{{ url_for('malware_page') }}"><i class="fas fa-biohazard"></i><span>Malware Analysis</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'log_analyzer_page' %}active{% endif %}">
+      <a href="{{ url_for('log_analyzer_page') }}"><i class="fas fa-chart-bar"></i><span>Log Analyzer</span></a>
+    </li>
+    <li class="nav-section"><span>ADVANCED TESTING</span></li>
+    <li class="nav-item {% if request.endpoint == 'api_security_page' %}active{% endif %}">
+      <a href="{{ url_for('api_security_page') }}"><i class="fas fa-plug"></i><span>API Security</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'cloud_security_page' %}active{% endif %}">
+      <a href="{{ url_for('cloud_security_page') }}"><i class="fas fa-cloud"></i><span>Cloud Security</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'mobile_security_page' %}active{% endif %}">
+      <a href="{{ url_for('mobile_security_page') }}"><i class="fas fa-mobile-alt"></i><span>Mobile Security</span></a>
+    </li>
+    <li class="nav-item {% if request.endpoint == 'wireless_page' %}active{% endif %}">
+      <a href="{{ url_for('wireless_page') }}"><i class="fas fa-wifi"></i><span>Wireless Security</span></a>
+    </li>
     <li class="nav-section"><span>REPORTING</span></li>
     <li class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
       <a href="{{ url_for('reports') }}"><i class="fas fa-file-alt"></i><span>Reports</span></a>

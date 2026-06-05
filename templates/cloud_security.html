@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Cloud & Container Security – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-cloud" style="color:var(--accent)"></i> Cloud &amp; Container Security{% endblock %}
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="cl-docker">Dockerfile</button>
+    <button class="tab-btn" data-tab="cl-env">.env Files</button>
+    <button class="tab-btn" data-tab="cl-aws">AWS</button>
+    <button class="tab-btn" data-tab="cl-azure">Azure</button>
+    <button class="tab-btn" data-tab="cl-gcp">GCP</button>
+  </div>
+
+  <div class="tab-panel active" id="cl-docker" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste Dockerfile</label>
+      <textarea id="cl-docker-input" class="form-control mono" rows="10" placeholder="FROM ubuntu:latest&#10;USER root&#10;COPY . /app&#10;RUN apt-get update && apt-get install -y openssh-server"></textarea></div>
+    <button class="btn btn-primary" onclick="clScan('docker','dockerfile')"><i class="fab fa-docker"></i> Scan Dockerfile</button>
+    <div id="cl-docker-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="cl-env" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste .env or config file</label>
+      <textarea id="cl-env-input" class="form-control mono" rows="10" placeholder="DB_PASSWORD=secret123&#10;API_KEY=sk_live_abc...&#10;AWS_ACCESS_KEY_ID=AKIA..."></textarea></div>
+    <button class="btn btn-primary" onclick="clScan('env-file','env')"><i class="fas fa-cog"></i> Scan for Secrets</button>
+    <div id="cl-env-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="cl-aws" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste IAM Policy / S3 Bucket Policy / CloudFormation</label>
+      <textarea id="cl-aws-input" class="form-control mono" rows="10" placeholder='{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Action":"*","Resource":"*"}]}'></textarea></div>
+    <button class="btn btn-primary" onclick="clScan('aws','aws')"><i class="fab fa-aws"></i> Audit AWS Config</button>
+    <div id="cl-aws-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="cl-azure" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste ARM Template / Storage Account JSON</label>
+      <textarea id="cl-azure-input" class="form-control mono" rows="10"></textarea></div>
+    <button class="btn btn-primary" onclick="clScan('azure','azure')"><i class="fab fa-microsoft"></i> Audit Azure Config</button>
+    <div id="cl-azure-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="cl-gcp" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste IAM Bindings / GCS Bucket Policy</label>
+      <textarea id="cl-gcp-input" class="form-control mono" rows="10"></textarea></div>
+    <button class="btn btn-primary" onclick="clScan('gcp','gcp')"><i class="fab fa-google"></i> Audit GCP Config</button>
+    <div id="cl-gcp-out" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function clScan(api,prefix){
+  const content=document.getElementById(`cl-${prefix==='env'?'env':prefix==='docker'?'docker':prefix}-input`).value.trim();
+  if(!content)return alert('Paste content first.');
+  const out=document.getElementById(`cl-${prefix==='env'?'env':prefix==='docker'?'docker':prefix}-out`);
+  out.innerHTML='<div class="card"><span class="spinner"></span> Scanning…</div>';
+  const data=await apiPost(`/api/cloud/${api}`,{content});
+  const v=data.vulnerabilities||data.findings||[];
+  const sec=data.secrets||[];
+  out.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-info"><div class="number">${v.length+sec.length}</div><div class="label">Total Issues</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-key"></i></div><div class="stat-info"><div class="number">${sec.length}</div><div class="label">Secrets</div></div></div>
+    ${data.risk_score!==undefined?`<div class="stat-card"><div class="stat-icon red"><i class="fas fa-thermometer-half"></i></div><div class="stat-info"><div class="number">${data.risk_score}/100</div><div class="label">Risk Score</div></div></div>`:''}
+  </div>
+  ${v.length?`<div class="card"><div class="card-title"><i class="fas fa-bug"></i> Vulnerabilities (${v.length})</div>
+    ${v.map(x=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid var(--accent);border-radius:4px;font-size:.85em">
+      <strong>${esc(x.type)}</strong> <span class="badge badge-${(x.severity||'medium').toLowerCase()}">${esc(x.severity||'')}</span>
+      ${x.line?`<span style="color:var(--muted);float:right">line ${x.line}</span>`:''}
+      ${x.content?`<div class="mono" style="background:var(--bg);padding:6px;margin-top:6px;border-radius:3px;font-size:.8em">${esc(x.content)}</div>`:''}
+      ${x.description?`<div style="margin-top:4px;color:var(--muted)">${esc(x.description)}</div>`:''}
+      <div style="margin-top:4px;color:var(--accent)">→ ${esc(x.remediation||'')}</div>
+    </div>`).join('')}</div>`:''}
+  ${sec.length?`<div class="card"><div class="card-title"><i class="fas fa-key"></i> Secrets Found</div>
+    ${sec.map(s=>`<div style="padding:10px;background:rgba(232,160,48,.08);margin:8px 0;border-left:3px solid var(--warning);border-radius:4px;font-size:.85em"><strong>[${esc(s.type)}]</strong> Line ${s.line}<div class="mono" style="background:var(--bg);padding:6px;margin-top:4px;border-radius:3px;font-size:.78em">${esc(s.content||'')}</div></div>`).join('')}</div>`:''}
+  ${!v.length&&!sec.length?'<div class="alert alert-success"><i class="fas fa-check-circle"></i> No issues detected.</div>':''}`;
+}
+</script>
+{% endblock %}

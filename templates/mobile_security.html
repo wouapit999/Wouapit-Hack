@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Mobile Security – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-mobile-alt" style="color:var(--accent)"></i> Mobile App Security{% endblock %}
+{% block content %}
+<div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Upload only APK/IPA files you are authorized to analyze. Max 50MB.</div>
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="mb-apk">APK Analyzer</button>
+    <button class="tab-btn" data-tab="mb-ipa">IPA Analyzer</button>
+  </div>
+  <div class="tab-panel active" id="mb-apk" style="padding:20px">
+    <div class="form-group"><label class="form-label">Android APK File</label>
+      <input type="file" id="apk-file" class="form-control" accept=".apk"></div>
+    <button class="btn btn-primary" onclick="mbApk()"><i class="fab fa-android"></i> Analyze APK</button>
+    <div id="apk-result" style="margin-top:16px"></div>
+  </div>
+  <div class="tab-panel" id="mb-ipa" style="padding:20px">
+    <div class="form-group"><label class="form-label">iOS IPA File</label>
+      <input type="file" id="ipa-file" class="form-control" accept=".ipa"></div>
+    <button class="btn btn-primary" onclick="mbIpa()"><i class="fab fa-apple"></i> Analyze IPA</button>
+    <div id="ipa-result" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function mbApk(){
+  const f=document.getElementById('apk-file').files[0];if(!f)return alert('Select APK.');
+  if(f.size>50*1024*1024)return alert('Too large (50MB max).');
+  const c=document.getElementById('apk-result');c.innerHTML='<div class="card"><span class="spinner"></span> Analyzing APK (this may take a moment)…</div>';
+  const buf=await f.arrayBuffer();const b64=btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));
+  const data=await apiPost('/api/mobile/apk',{filename:f.name,data:b64});
+  renderResult(c,data,'APK');
+}
+async function mbIpa(){
+  const f=document.getElementById('ipa-file').files[0];if(!f)return alert('Select IPA.');
+  if(f.size>50*1024*1024)return alert('Too large.');
+  const c=document.getElementById('ipa-result');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const buf=await f.arrayBuffer();const b64=btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));
+  const data=await apiPost('/api/mobile/ipa',{filename:f.name,data:b64});
+  renderResult(c,data,'IPA');
+}
+function renderResult(c,data,type){
+  if(data.error)return c.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;
+  const verdictColor=data.verdict==='HIGH RISK'?'var(--danger)':data.verdict==='MEDIUM RISK'?'var(--warning)':'var(--success)';
+  c.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-thermometer-full"></i></div><div class="stat-info"><div class="number" style="color:${verdictColor}">${esc(data.verdict||'?')}</div><div class="label">Verdict</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-bug"></i></div><div class="stat-info"><div class="number">${(data.vulnerabilities||[]).length}</div><div class="label">Vulnerabilities</div></div></div>
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-key"></i></div><div class="stat-info"><div class="number">${(data.hardcoded_secrets||[]).length}</div><div class="label">Secrets</div></div></div>
+    <div class="stat-card"><div class="stat-icon teal"><i class="fas fa-thermometer-half"></i></div><div class="stat-info"><div class="number">${data.risk_score||0}/100</div><div class="label">Risk Score</div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title"><i class="fas fa-fingerprint"></i> Hashes</div>
+      <div class="mono" style="font-size:.78em;margin-top:8px"><div><strong>MD5:</strong> ${esc(data.hashes?.md5||'')}</div><div style="margin-top:3px"><strong>SHA256:</strong> ${esc(data.hashes?.sha256||'')}</div><div style="margin-top:3px"><strong>Size:</strong> ${(data.hashes?.size||0).toLocaleString()} bytes</div></div></div>
+    <div class="card"><div class="card-title"><i class="fas fa-info-circle"></i> ${type} Info</div>
+      <div style="font-size:.85em;margin-top:8px">${data.package_name?`<div><strong>Package:</strong> ${esc(data.package_name)}</div>`:''}${data.min_sdk?`<div><strong>Min SDK:</strong> ${data.min_sdk}</div>`:''}<div><strong>Files:</strong> ${data.file_count||0}</div><div><strong>Native libs:</strong> ${(data.native_libs||[]).length}</div></div></div>
+  </div>
+  ${(data.dangerous_permissions||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-shield-alt"></i> Dangerous Permissions (${data.dangerous_permissions.length})</div>
+    ${data.dangerous_permissions.map(p=>`<div style="padding:8px;background:var(--surface2);margin:6px 0;border-left:3px solid var(--accent);border-radius:4px;font-size:.85em"><strong class="mono">${esc(p.permission)}</strong> <span class="badge badge-${p.severity.toLowerCase()}">${esc(p.severity)}</span><div style="color:var(--muted);margin-top:4px">${esc(p.description||'')}</div></div>`).join('')}</div>`:''}
+  ${(data.vulnerabilities||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-bug"></i> Vulnerabilities</div>
+    ${data.vulnerabilities.map(v=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid var(--danger);border-radius:4px;font-size:.85em"><strong>${esc(v.type)}</strong> <span class="badge badge-${v.severity.toLowerCase()}">${esc(v.severity)}</span><div style="margin-top:4px;color:var(--muted)">${esc(v.description||'')}</div><div style="margin-top:4px;color:var(--accent)">→ ${esc(v.remediation||'')}</div></div>`).join('')}</div>`:''}
+  ${(data.hardcoded_secrets||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-key"></i> Hardcoded Secrets</div>
+    ${data.hardcoded_secrets.map(s=>`<div style="padding:8px;background:rgba(192,57,43,.08);margin:6px 0;border-left:3px solid var(--danger);border-radius:4px;font-size:.85em"><strong>[${esc(s.type)}]</strong> <span class="mono">${esc(s.value)}</span></div>`).join('')}</div>`:''}
+  ${(data.urls||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-link"></i> URLs Found (${data.urls.length})</div><div class="mono" style="font-size:.78em;margin-top:8px;max-height:200px;overflow-y:auto">${data.urls.slice(0,30).map(u=>`<div style="padding:2px 0">${esc(u)}</div>`).join('')}</div></div>`:''}`;
+}
+</script>
+{% endblock %}

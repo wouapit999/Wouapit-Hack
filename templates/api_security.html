@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}API Security – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-plug" style="color:var(--accent)"></i> API Security Testing{% endblock %}
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ap-jwt">JWT Analyzer</button>
+    <button class="tab-btn" data-tab="ap-fuzz">API Fuzzer</button>
+    <button class="tab-btn" data-tab="ap-rate">Rate Limit</button>
+    <button class="tab-btn" data-tab="ap-swagger">Swagger/OpenAPI</button>
+    <button class="tab-btn" data-tab="ap-idor">IDOR</button>
+    <button class="tab-btn" data-tab="ap-auth">Broken Auth</button>
+  </div>
+
+  <div class="tab-panel active" id="ap-jwt" style="padding:20px">
+    <div class="form-group"><label class="form-label">JWT Token</label>
+      <textarea id="jwt-input" class="form-control mono" rows="3" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."></textarea></div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="jwtAnalyze()"><i class="fas fa-search"></i> Analyze</button>
+      <button class="btn btn-warning" onclick="jwtForge()"><i class="fas fa-hammer"></i> Forge none-alg Token</button>
+    </div>
+    <div class="output-box" id="jwt-out" style="margin-top:16px"><span class="output-placeholder">JWT analysis…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="ap-fuzz" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Target URL</label><input type="text" id="fz-url" class="form-control" placeholder="https://api.example.com/users?id=1"></div>
+      <div class="form-group"><label class="form-label">Method</label>
+        <select id="fz-method" class="form-control"><option>GET</option><option>POST</option></select></div>
+    </div>
+    <div class="form-group"><label class="form-label">Fuzz Types</label>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;color:var(--teal);font-size:.88em">
+        <label><input type="checkbox" class="fz-type" value="sqli" checked> SQLi</label>
+        <label><input type="checkbox" class="fz-type" value="xss" checked> XSS</label>
+        <label><input type="checkbox" class="fz-type" value="cmd" checked> Cmd Inject</label>
+        <label><input type="checkbox" class="fz-type" value="ssti" checked> SSTI</label>
+        <label><input type="checkbox" class="fz-type" value="lfi"> LFI</label>
+        <label><input type="checkbox" class="fz-type" value="xxe"> XXE</label>
+        <label><input type="checkbox" class="fz-type" value="format"> Format String</label>
+      </div></div>
+    <button class="btn btn-primary" onclick="fuzz()"><i class="fas fa-bug"></i> Fuzz Endpoint</button>
+    <div class="output-box" id="fz-out" style="margin-top:16px"><span class="output-placeholder">Fuzzing results…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="ap-rate" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">URL</label><input type="text" id="rl-url" class="form-control"></div>
+      <div class="form-group"><label class="form-label">Request Count</label><input type="number" id="rl-count" class="form-control" value="30" max="50"></div>
+    </div>
+    <button class="btn btn-primary" onclick="rateLimit()"><i class="fas fa-tachometer-alt"></i> Test Rate Limiting</button>
+    <div class="output-box" id="rl-out" style="margin-top:16px"><span class="output-placeholder">Rate limit analysis…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="ap-swagger" style="padding:20px">
+    <div class="form-group"><label class="form-label">Paste Swagger/OpenAPI Spec (JSON)</label>
+      <textarea id="sw-input" class="form-control mono" rows="10" placeholder='{"openapi":"3.0.0","paths":{"/users":{...}}}'></textarea></div>
+    <button class="btn btn-primary" onclick="swagger()"><i class="fas fa-file-code"></i> Parse Spec</button>
+    <div id="sw-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="ap-idor" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Base URL</label><input type="text" id="id-url" class="form-control" placeholder="https://api.example.com/users"></div>
+      <div class="form-group"><label class="form-label">Parameter</label><input type="text" id="id-param" class="form-control" value="id"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Start ID</label><input type="number" id="id-start" class="form-control" value="1"></div>
+      <div class="form-group"><label class="form-label">Count</label><input type="number" id="id-count" class="form-control" value="10" max="20"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Auth Token (optional)</label><input type="text" id="id-token" class="form-control"></div>
+    <button class="btn btn-primary" onclick="idor()"><i class="fas fa-id-badge"></i> Test IDOR</button>
+    <div class="output-box" id="id-out" style="margin-top:16px"><span class="output-placeholder">IDOR test results…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="ap-auth" style="padding:20px">
+    <div class="form-group"><label class="form-label">Login Endpoint URL</label><input type="text" id="au-url" class="form-control" placeholder="https://example.com/login"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Username Field</label><input type="text" id="au-uf" class="form-control" value="username"></div>
+      <div class="form-group"><label class="form-label">Password Field</label><input type="text" id="au-pf" class="form-control" value="password"></div>
+    </div>
+    <button class="btn btn-primary" onclick="brokenAuth()"><i class="fas fa-user-lock"></i> Test Default Creds</button>
+    <div class="output-box" id="au-out" style="margin-top:16px"><span class="output-placeholder">Auth test…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function jwtAnalyze(){
+  const t=document.getElementById('jwt-input').value.trim();if(!t)return alert('Enter JWT.');
+  const out=document.getElementById('jwt-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/apisec/jwt-analyze',{token:t});
+  let html=`<span class="output-line heading">JWT Analysis</span>\n\n`;
+  if(data.error)html+=`<span class="output-line error">✗ ${esc(data.error)}</span>`;
+  else{html+=`<span class="output-line info">Algorithm: ${esc(data.info?.algorithm||'')}</span>\n`;
+    if(data.info?.expires_in_seconds!==undefined)html+=`<span class="output-line">Expires in: ${data.info.expires_in_seconds}s</span>\n`;
+    html+=`\n<span class="output-line heading">Header:</span>\n<pre style="background:none;padding:0;color:var(--teal)">${esc(JSON.stringify(data.header,null,2))}</pre>\n`;
+    html+=`<span class="output-line heading">Payload:</span>\n<pre style="background:none;padding:0;color:var(--teal)">${esc(JSON.stringify(data.payload,null,2))}</pre>\n\n`;
+    if((data.vulnerabilities||[]).length){html+=`<span class="output-line heading">⚠ Vulnerabilities:</span>\n`;
+      data.vulnerabilities.forEach(v=>{html+=`<span class="output-line error">[${esc(v.severity)}] ${esc(v.type)}</span>\n  <span class="output-line">${esc(v.description||'')}</span>\n  <span class="output-line info">→ ${esc(v.remediation||'')}</span>\n\n`;});}}
+  out.innerHTML=html;
+}
+async function jwtForge(){
+  const t=document.getElementById('jwt-input').value.trim();if(!t)return alert('Enter JWT.');
+  const out=document.getElementById('jwt-out');
+  const data=await apiPost('/api/apisec/jwt-forge',{token:t});
+  if(data.error)return out.innerHTML=`<span class="output-line error">${esc(data.error)}</span>`;
+  out.innerHTML=`<span class="output-line heading">Forged none-algorithm Token</span>\n\n<span class="output-line warning mono" style="word-break:break-all">${esc(data.forged_token)}</span>\n\n<span class="output-line info">${esc(data.note||'')}</span>`;
+}
+async function fuzz(){
+  const url=document.getElementById('fz-url').value.trim();if(!url)return alert('Enter URL.');
+  const types=Array.from(document.querySelectorAll('.fz-type:checked')).map(c=>c.value);
+  const out=document.getElementById('fz-out');out.innerHTML='<span class="spinner"></span> Fuzzing…';
+  const data=await apiPost('/api/apisec/fuzz',{url,method:document.getElementById('fz-method').value,fuzz_types:types});
+  let html=`<span class="output-line heading">Fuzz Results (${data.total_vulns||0} vulns)</span>\n\n`;
+  (data.vulnerabilities||[]).forEach(v=>{html+=`<span class="output-line error">[${esc(v.severity)}] ${esc(v.type)} in '${esc(v.parameter)}'</span>\n  <span class="output-line warning">  Payload: ${esc(v.payload)}</span>\n  <span class="output-line">  ${esc(v.evidence||'')}</span>\n\n`;});
+  if(!data.vulnerabilities?.length)html+=`<span class="output-line success">✓ No fuzz hits</span>`;
+  out.innerHTML=html;
+}
+async function rateLimit(){
+  const url=document.getElementById('rl-url').value.trim();if(!url)return alert('Enter URL.');
+  const out=document.getElementById('rl-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/apisec/rate-limit',{url,count:parseInt(document.getElementById('rl-count').value)});
+  let html=`<span class="output-line heading">Rate Limit Test</span>\n\n<span class="output-line info">Sent ${data.total_requests} in ${data.elapsed_seconds}s (${data.rps} rps)</span>\n<span class="output-line">Status codes: ${esc(JSON.stringify(data.status_codes||{}))}</span>\n<span class="output-line">Rate limited: ${data.rate_limited}</span>\n<span class="output-line">Rate headers: ${esc((data.rate_limit_headers||[]).join(', '))}</span>\n\n`;
+  if(data.finding)html+=`<span class="output-line error">[${esc(data.finding.severity)}] ${esc(data.finding.type)}</span>\n<span class="output-line">${esc(data.finding.description||'')}</span>\n<span class="output-line info">→ ${esc(data.finding.remediation||'')}</span>`;
+  out.innerHTML=html;
+}
+async function swagger(){
+  const c=document.getElementById('sw-input').value.trim();if(!c)return alert('Paste spec.');
+  const out=document.getElementById('sw-out');out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/apisec/swagger',{content:c});
+  if(data.error)return out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;
+  out.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon teal"><i class="fas fa-list"></i></div><div class="stat-info"><div class="number">${data.total_endpoints||0}</div><div class="label">Endpoints</div></div></div>
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-shield-alt"></i></div><div class="stat-info"><div class="number">${(data.auth_schemes||[]).length}</div><div class="label">Auth Schemes</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-info"><div class="number">${(data.vulnerabilities||[]).length}</div><div class="label">Issues</div></div></div>
+  </div>
+  ${(data.vulnerabilities||[]).length?`<div class="card"><div class="card-title">Security Findings</div>${data.vulnerabilities.map(v=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid var(--accent);border-radius:4px;font-size:.85em"><strong>${esc(v.type)}</strong> <span class="badge badge-${v.severity.toLowerCase()}">${esc(v.severity)}</span><div style="margin-top:4px;color:var(--accent)">→ ${esc(v.remediation||'')}</div></div>`).join('')}</div>`:''}
+  <div class="card"><div class="card-title">Endpoints</div><table class="data-table"><tr><th>Method</th><th>Path</th><th>Auth</th></tr>${(data.endpoints||[]).map(e=>`<tr><td><span class="badge badge-info">${esc(e.method)}</span></td><td class="mono">${esc(e.path)}</td><td>${e.security===null?'<span style="color:var(--danger)">None</span>':'✓'}</td></tr>`).join('')}</table></div>`;
+}
+async function idor(){
+  const url=document.getElementById('id-url').value.trim();if(!url)return alert('Enter URL.');
+  const out=document.getElementById('id-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/apisec/idor',{url,param:document.getElementById('id-param').value,start:parseInt(document.getElementById('id-start').value),count:parseInt(document.getElementById('id-count').value),token:document.getElementById('id-token').value});
+  renderJSON(out,data,'IDOR Test');
+}
+async function brokenAuth(){
+  const url=document.getElementById('au-url').value.trim();if(!url)return alert('Enter URL.');
+  const out=document.getElementById('au-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/apisec/broken-auth',{url,username_field:document.getElementById('au-uf').value,password_field:document.getElementById('au-pf').value});
+  renderJSON(out,data,'Broken Auth Test');
+}
+</script>
+{% endblock %}

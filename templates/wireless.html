@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Wireless Security – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-wifi" style="color:var(--accent)"></i> Wireless Security{% endblock %}
+{% block content %}
+<div class="alert alert-info"><i class="fas fa-info-circle"></i> Web-based wireless analysis. Real RF scanning requires hardware access — runs in simulation/analysis mode here. Use Aircrack-ng / Hashcat for live captures.</div>
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="ws-scan">WiFi Scan</button>
+    <button class="tab-btn" data-tab="ws-hs">Handshake Analysis</button>
+    <button class="tab-btn" data-tab="ws-crack">Hash Crack</button>
+    <button class="tab-btn" data-tab="ws-rogue">Rogue AP</button>
+  </div>
+  <div class="tab-panel active" id="ws-scan" style="padding:20px">
+    <button class="btn btn-primary" onclick="wsScan()"><i class="fas fa-broadcast-tower"></i> Run WiFi Scan</button>
+    <div id="ws-scan-result" style="margin-top:16px"></div>
+  </div>
+  <div class="tab-panel" id="ws-hs" style="padding:20px">
+    <div class="form-group"><label class="form-label">Upload .cap / .pcap / .pcapng / .hc22000</label>
+      <input type="file" id="ws-hs-file" class="form-control" accept=".cap,.pcap,.pcapng,.hc22000"></div>
+    <button class="btn btn-primary" onclick="wsHandshake()"><i class="fas fa-handshake"></i> Analyze Capture</button>
+    <div class="output-box" id="ws-hs-out" style="margin-top:16px"><span class="output-placeholder">Capture analysis…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+  <div class="tab-panel" id="ws-crack" style="padding:20px">
+    <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> Demo SHA-256 cracker. For real WPA cracking use <code>hashcat -m 22000</code> with rockyou.txt.</div>
+    <div class="form-group"><label class="form-label">Hash to crack</label><input type="text" id="ws-hash" class="form-control mono" placeholder="hash value"></div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">SSID (for word mutations)</label><input type="text" id="ws-ssid" class="form-control" placeholder="Home_WiFi"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Custom Wordlist (optional, one per line)</label><textarea id="ws-wl" class="form-control mono" rows="4"></textarea></div>
+    <button class="btn btn-primary" onclick="wsCrack()"><i class="fas fa-unlock"></i> Attempt Crack</button>
+    <div class="output-box" id="ws-crack-out" style="margin-top:16px"><span class="output-placeholder">Crack results…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+  <div class="tab-panel" id="ws-rogue" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i> Compares scanned APs against your known/trusted list to detect evil twins, rogue APs, and honeypots.</div>
+    <div class="form-group"><label class="form-label">Known/Trusted Networks (JSON)</label>
+      <textarea id="ws-known" class="form-control mono" rows="5" placeholder='[{"ssid":"Corporate-WiFi","bssid":"AA:BB:CC:11:22:33"}]'></textarea></div>
+    <button class="btn btn-primary" onclick="wsRogue()"><i class="fas fa-user-shield"></i> Detect Rogue APs</button>
+    <div class="output-box" id="ws-rogue-out" style="margin-top:16px"><span class="output-placeholder">Rogue AP findings…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function wsScan(){
+  const c=document.getElementById('ws-scan-result');c.innerHTML='<div class="card"><span class="spinner"></span> Scanning…</div>';
+  const data=await apiPost('/api/wireless/scan',{interface:'wlan0'});
+  const aps=data.access_points||[];
+  c.innerHTML=`
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon teal"><i class="fas fa-broadcast-tower"></i></div><div class="stat-info"><div class="number">${data.total_aps||0}</div><div class="label">APs Detected</div></div></div>
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-unlock"></i></div><div class="stat-info"><div class="number">${data.open_networks||0}</div><div class="label">Open Networks</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-eye-slash"></i></div><div class="stat-info"><div class="number">${data.hidden_networks||0}</div><div class="label">Hidden</div></div></div>
+    <div class="stat-card"><div class="stat-icon green"><i class="fas fa-shield-alt"></i></div><div class="stat-info"><div class="number">${data.wpa3_networks||0}</div><div class="label">WPA3</div></div></div>
+  </div>
+  <div class="card"><div class="card-title"><i class="fas fa-list"></i> Discovered Access Points</div>
+    <table class="data-table" style="margin-top:10px"><tr><th>SSID</th><th>BSSID</th><th>Ch</th><th>Signal</th><th>Encryption</th><th>Risk</th></tr>
+    ${aps.map(a=>`<tr><td>${esc(a.ssid||'(hidden)')}</td><td class="mono">${esc(a.bssid)}</td><td>${a.channel}</td><td>${a.signal} dBm</td><td>${esc(a.encryption)}</td><td><span class="badge badge-${a.risk.toLowerCase()}">${esc(a.risk)}</span></td></tr>`).join('')}</table></div>
+  ${(data.findings||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-exclamation-triangle"></i> Security Findings</div>
+    ${data.findings.map(f=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid var(--accent);border-radius:4px;font-size:.88em"><strong>${esc(f.type)}</strong> <span class="badge badge-${f.severity.toLowerCase()}">${esc(f.severity)}</span><div style="color:var(--muted);margin-top:4px">${esc(f.description||'')}</div><div style="color:var(--accent);margin-top:4px;font-size:.85em">→ ${esc(f.remediation||'')}</div></div>`).join('')}</div>`:''}`;
+}
+async function wsHandshake(){
+  const f=document.getElementById('ws-hs-file').files[0];if(!f)return alert('Select file.');
+  if(f.size>50*1024*1024)return alert('Too large.');
+  const out=document.getElementById('ws-hs-out');out.innerHTML='<span class="spinner"></span>';
+  const buf=await f.arrayBuffer();const b64=btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));
+  const data=await apiPost('/api/wireless/analyze-handshake',{filename:f.name,data:b64});
+  renderJSON(out,data,`Handshake: ${f.name}`);
+}
+async function wsCrack(){
+  const h=document.getElementById('ws-hash').value.trim();if(!h)return alert('Enter hash.');
+  const out=document.getElementById('ws-crack-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/wireless/crack',{hash:h,ssid:document.getElementById('ws-ssid').value,wordlist:document.getElementById('ws-wl').value});
+  let html=`<span class="output-line heading">WPA Crack Attempt</span>\n\n`;
+  if(data.cracked)html+=`<span class="output-line success">✓ CRACKED!\nPassword: <strong>${esc(data.password)}</strong></span>`;
+  else html+=`<span class="output-line warning">✗ Not found.\n${esc(data.note||'')}</span>`;
+  out.innerHTML=html;
+}
+async function wsRogue(){
+  let known=[];try{known=JSON.parse(document.getElementById('ws-known').value||'[]');}catch(e){return alert('Invalid JSON');}
+  const out=document.getElementById('ws-rogue-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/wireless/rogue-ap',{known});
+  let html=`<span class="output-line heading">Rogue AP Detection (${data.total_rogues} rogue/evil twin)</span>\n\n`;
+  if((data.evil_twins||[]).length){html+=`<span class="output-line error">━ EVIL TWINS ━</span>\n`;
+    data.evil_twins.forEach(e=>{html+=`  <span class="output-line error">${esc(e.ssid)} | ${esc(e.rogue_bssid)} — ${esc(e.description||'')}</span>\n`;});}
+  if((data.rogue_aps||[]).length){html+=`\n<span class="output-line warning">━ ROGUE APs ━</span>\n`;
+    data.rogue_aps.forEach(r=>{html+=`  <span class="output-line warning">${esc(r.ssid)} | ${esc(r.bssid)} — ${esc(r.description||'')}</span>\n`;});}
+  if(!data.total_rogues)html+='<span class="output-line success">✓ No rogue APs detected</span>';
+  out.innerHTML=html;
+}
+</script>
+{% endblock %}

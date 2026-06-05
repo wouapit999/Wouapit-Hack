@@ -80,8 +80,13 @@
 </div>
 
 <!-- All Tools Grid -->
-<div class="section-title" style="margin-top:8px"><i class="fas fa-tools"></i> All Tools</div>
+<div class="section-title" style="margin-top:8px"><i class="fas fa-tools"></i> All Modules</div>
 <div class="tool-grid">
+  <a class="tool-card" href="/autoscan">
+    <div class="tool-card-icon"><i class="fas fa-crosshairs"></i></div>
+    <h3>⚡ Auto Scan</h3>
+    <p>One-target full scan with Black/Gray/White hat modes — runs all tools and auto-generates reports.</p>
+  </a>
   <a class="tool-card" href="/recon">
     <div class="tool-card-icon"><i class="fas fa-search"></i></div>
     <h3>Reconnaissance Suite</h3>
@@ -90,12 +95,57 @@
   <a class="tool-card" href="/web-scanner">
     <div class="tool-card-icon"><i class="fas fa-globe"></i></div>
     <h3>Web Application Scanner</h3>
-    <p>Directory brute force, SQLi &amp; XSS detection, SSL analysis, tech fingerprinting.</p>
+    <p>Directory brute force, SQLi/XSS, SSL, CORS, LFI, SSTI, SSRF and 10+ more web tests.</p>
   </a>
   <a class="tool-card" href="/network">
     <div class="tool-card-icon"><i class="fas fa-network-wired"></i></div>
     <h3>Network Tools</h3>
     <p>Ping sweep across CIDR ranges, traceroute, and banner grabbing.</p>
+  </a>
+  <a class="tool-card" href="/vuln-management">
+    <div class="tool-card-icon"><i class="fas fa-shield-virus"></i></div>
+    <h3>Vulnerability Management</h3>
+    <p>Import Nmap/Nikto/OpenVAS/Nessus results. CVE correlation, exploit suggestions, dashboard.</p>
+  </a>
+  <a class="tool-card" href="/osint">
+    <div class="tool-card-icon"><i class="fas fa-user-secret"></i></div>
+    <h3>OSINT Intelligence</h3>
+    <p>HIBP breach checks, GitHub footprinting, metadata extraction, dark web exposure.</p>
+  </a>
+  <a class="tool-card" href="/threat-intel">
+    <div class="tool-card-icon"><i class="fas fa-satellite"></i></div>
+    <h3>Threat Intelligence</h3>
+    <p>IP &amp; domain reputation, IOC lookups, threat feed aggregator (URLhaus, ThreatFox).</p>
+  </a>
+  <a class="tool-card" href="/malware">
+    <div class="tool-card-icon"><i class="fas fa-biohazard"></i></div>
+    <h3>Malware Analysis</h3>
+    <p>Static analyzer, PE header, YARA-style detection, VirusTotal lookup, sandbox summary.</p>
+  </a>
+  <a class="tool-card" href="/log-analyzer">
+    <div class="tool-card-icon"><i class="fas fa-chart-bar"></i></div>
+    <h3>Log &amp; SIEM Analysis</h3>
+    <p>Parse Apache/Nginx/Syslog. Detect brute force, scanners, anomalies. GeoIP enrichment.</p>
+  </a>
+  <a class="tool-card" href="/api-security">
+    <div class="tool-card-icon"><i class="fas fa-plug"></i></div>
+    <h3>API Security Testing</h3>
+    <p>JWT analyzer + forger, fuzzer, rate limit, Swagger parser, IDOR, broken auth.</p>
+  </a>
+  <a class="tool-card" href="/cloud-security">
+    <div class="tool-card-icon"><i class="fas fa-cloud"></i></div>
+    <h3>Cloud &amp; Container Security</h3>
+    <p>Dockerfile scanner, .env secrets, AWS/Azure/GCP misconfiguration audits.</p>
+  </a>
+  <a class="tool-card" href="/mobile-security">
+    <div class="tool-card-icon"><i class="fas fa-mobile-alt"></i></div>
+    <h3>Mobile App Security</h3>
+    <p>APK analyzer (decompile, permissions, manifest, secrets). IPA metadata analyzer.</p>
+  </a>
+  <a class="tool-card" href="/wireless">
+    <div class="tool-card-icon"><i class="fas fa-wifi"></i></div>
+    <h3>Wireless Security</h3>
+    <p>WiFi AP scan, WPA handshake analysis, hash cracking engine, rogue AP detection.</p>
   </a>
   <a class="tool-card" href="/passwords">
     <div class="tool-card-icon"><i class="fas fa-key"></i></div>
@@ -110,7 +160,7 @@
   <a class="tool-card" href="/reports">
     <div class="tool-card-icon"><i class="fas fa-file-alt"></i></div>
     <h3>Report Generator</h3>
-    <p>Build professional HTML pentest reports with findings, severity ratings, and recommendations.</p>
+    <p>PDF / DOCX / HTML reports with Bouquet Innovation branding, findings &amp; remediation.</p>
   </a>
 </div>
 {% endblock %}

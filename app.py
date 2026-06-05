@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file
-import os
+import os, base64
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
@@ -347,6 +347,315 @@ def api_report_download(filename):
                 ".html":"text/html"}.get(ext, "application/octet-stream")
         return send_file(path, as_attachment=True, mimetype=mime)
     return jsonify({"error": "File not found"}), 404
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# NEW MODULE PAGES
+# ═══════════════════════════════════════════════════════════════════════════════
+
+@app.route("/vuln-management")
+def vuln_management():
+    return render_template("vuln_management.html")
+
+@app.route("/osint")
+def osint_page():
+    return render_template("osint.html")
+
+@app.route("/malware")
+def malware_page():
+    return render_template("malware.html")
+
+@app.route("/wireless")
+def wireless_page():
+    return render_template("wireless.html")
+
+@app.route("/cloud-security")
+def cloud_security_page():
+    return render_template("cloud_security.html")
+
+@app.route("/api-security")
+def api_security_page():
+    return render_template("api_security.html")
+
+@app.route("/mobile-security")
+def mobile_security_page():
+    return render_template("mobile_security.html")
+
+@app.route("/log-analyzer")
+def log_analyzer_page():
+    return render_template("log_analyzer.html")
+
+@app.route("/threat-intel")
+def threat_intel_page():
+    return render_template("threat_intel.html")
+
+# ─── Vulnerability Management APIs ──────────────────────────────────────────
+
+@app.route("/api/vuln/import-nmap", methods=["POST"])
+def api_import_nmap():
+    from modules.vuln_mgmt import parse_nmap_xml
+    xml = request.json.get("xml","")
+    return jsonify(parse_nmap_xml(xml))
+
+@app.route("/api/vuln/import-nikto", methods=["POST"])
+def api_import_nikto():
+    from modules.vuln_mgmt import parse_nikto_output
+    text = request.json.get("text","")
+    return jsonify(parse_nikto_output(text))
+
+@app.route("/api/vuln/import-openvas", methods=["POST"])
+def api_import_openvas():
+    from modules.vuln_mgmt import parse_openvas_xml
+    xml = request.json.get("xml","")
+    return jsonify(parse_openvas_xml(xml))
+
+@app.route("/api/vuln/correlate-cves", methods=["POST"])
+def api_correlate_cves():
+    from modules.vuln_mgmt import correlate_cves
+    cves = request.json.get("cves",[])
+    return jsonify(correlate_cves(cves))
+
+@app.route("/api/vuln/suggest-exploits", methods=["POST"])
+def api_suggest_exploits():
+    from modules.vuln_mgmt import suggest_exploits
+    query = request.json.get("query","")
+    return jsonify(suggest_exploits(query))
+
+@app.route("/api/vuln/dashboard", methods=["POST"])
+def api_vuln_dashboard():
+    from modules.vuln_mgmt import build_vuln_dashboard
+    vulns = request.json.get("vulnerabilities",[])
+    return jsonify(build_vuln_dashboard(vulns))
+
+# ─── OSINT APIs ──────────────────────────────────────────────────────────────
+
+@app.route("/api/osint/email-breach", methods=["POST"])
+def api_email_breach():
+    from modules.osint import email_breach_check
+    data = request.json
+    return jsonify(email_breach_check(data.get("email",""), data.get("api_key","")))
+
+@app.route("/api/osint/password-pwned", methods=["POST"])
+def api_password_pwned():
+    from modules.osint import password_pwned_check
+    return jsonify(password_pwned_check(request.json.get("password","")))
+
+@app.route("/api/osint/github", methods=["POST"])
+def api_github_footprint():
+    from modules.osint import github_footprint
+    return jsonify(github_footprint(request.json.get("username","")))
+
+@app.route("/api/osint/dns-history", methods=["POST"])
+def api_dns_history():
+    from modules.osint import dns_history
+    return jsonify(dns_history(request.json.get("domain","")))
+
+@app.route("/api/osint/metadata", methods=["POST"])
+def api_metadata():
+    from modules.osint import extract_metadata
+    data     = request.json
+    filename = data.get("filename","file.bin")
+    b64_data = data.get("data","")
+    try:
+        file_bytes = base64.b64decode(b64_data)
+    except Exception:
+        return jsonify({"error":"Invalid base64 data"}), 400
+    return jsonify(extract_metadata(file_bytes, filename))
+
+@app.route("/api/osint/dark-web", methods=["POST"])
+def api_dark_web():
+    from modules.osint import dark_web_exposure
+    return jsonify(dark_web_exposure(request.json.get("query","")))
+
+# ─── Malware Analysis APIs ───────────────────────────────────────────────────
+
+@app.route("/api/malware/analyze", methods=["POST"])
+def api_malware_analyze():
+    from modules.malware_analysis import hash_file, extract_strings, analyze_pe, yara_scan, sandbox_summary
+    data     = request.json
+    filename = data.get("filename","sample.bin")
+    b64_data = data.get("data","")
+    try:
+        file_bytes = base64.b64decode(b64_data)
+    except Exception:
+        return jsonify({"error":"Invalid base64 data"}), 400
+    return jsonify({
+        "hashes":   hash_file(file_bytes),
+        "strings":  extract_strings(file_bytes),
+        "pe":       analyze_pe(file_bytes),
+        "yara":     yara_scan(file_bytes),
+        "sandbox":  sandbox_summary(file_bytes, filename),
+    })
+
+@app.route("/api/malware/virustotal", methods=["POST"])
+def api_malware_vt():
+    from modules.malware_analysis import virustotal_lookup
+    data = request.json
+    return jsonify(virustotal_lookup(data.get("hash",""), data.get("api_key","")))
+
+# ─── Wireless APIs ───────────────────────────────────────────────────────────
+
+@app.route("/api/wireless/scan", methods=["POST"])
+def api_wifi_scan():
+    from modules.wireless import wifi_scan_simulation
+    iface = request.json.get("interface","wlan0")
+    return jsonify(wifi_scan_simulation(iface))
+
+@app.route("/api/wireless/analyze-handshake", methods=["POST"])
+def api_handshake():
+    from modules.wireless import analyze_handshake_file
+    data = request.json
+    b64  = data.get("data","")
+    try:
+        file_bytes = base64.b64decode(b64)
+    except Exception:
+        return jsonify({"error":"Invalid base64"}), 400
+    return jsonify(analyze_handshake_file(file_bytes, data.get("filename","capture.cap")))
+
+@app.route("/api/wireless/crack", methods=["POST"])
+def api_wifi_crack():
+    from modules.wireless import crack_wpa_hash
+    data = request.json
+    return jsonify(crack_wpa_hash(data.get("hash",""), data.get("ssid",""), data.get("wordlist","")))
+
+@app.route("/api/wireless/rogue-ap", methods=["POST"])
+def api_rogue_ap():
+    from modules.wireless import detect_rogue_ap
+    data = request.json
+    return jsonify(detect_rogue_ap(data.get("known",[]), data.get("scanned",None)))
+
+# ─── Cloud Security APIs ─────────────────────────────────────────────────────
+
+@app.route("/api/cloud/dockerfile", methods=["POST"])
+def api_dockerfile():
+    from modules.cloud_security import scan_dockerfile
+    return jsonify(scan_dockerfile(request.json.get("content","")))
+
+@app.route("/api/cloud/env-file", methods=["POST"])
+def api_env_file():
+    from modules.cloud_security import scan_env_file
+    return jsonify(scan_env_file(request.json.get("content","")))
+
+@app.route("/api/cloud/aws", methods=["POST"])
+def api_aws():
+    from modules.cloud_security import scan_aws_config
+    return jsonify(scan_aws_config(request.json.get("content","")))
+
+@app.route("/api/cloud/azure", methods=["POST"])
+def api_azure():
+    from modules.cloud_security import scan_azure_config
+    return jsonify(scan_azure_config(request.json.get("content","")))
+
+@app.route("/api/cloud/gcp", methods=["POST"])
+def api_gcp():
+    from modules.cloud_security import scan_gcp_config
+    return jsonify(scan_gcp_config(request.json.get("content","")))
+
+# ─── API Security APIs ───────────────────────────────────────────────────────
+
+@app.route("/api/apisec/jwt-analyze", methods=["POST"])
+def api_jwt_analyze():
+    from modules.api_security import jwt_analyze
+    return jsonify(jwt_analyze(request.json.get("token","")))
+
+@app.route("/api/apisec/jwt-forge", methods=["POST"])
+def api_jwt_forge():
+    from modules.api_security import jwt_forge_none
+    return jsonify(jwt_forge_none(request.json.get("token","")))
+
+@app.route("/api/apisec/fuzz", methods=["POST"])
+def api_fuzz():
+    from modules.api_security import fuzz_endpoint
+    data = request.json
+    return jsonify(fuzz_endpoint(data.get("url",""), data.get("method","GET"),
+                                  data.get("params"), data.get("fuzz_types")))
+
+@app.route("/api/apisec/rate-limit", methods=["POST"])
+def api_rate_limit():
+    from modules.api_security import rate_limit_test
+    data = request.json
+    return jsonify(rate_limit_test(data.get("url",""), data.get("count",30),
+                                    data.get("method","GET"), data.get("body")))
+
+@app.route("/api/apisec/swagger", methods=["POST"])
+def api_swagger():
+    from modules.api_security import parse_swagger
+    return jsonify(parse_swagger(request.json.get("content","")))
+
+@app.route("/api/apisec/idor", methods=["POST"])
+def api_idor():
+    from modules.api_security import idor_test
+    data = request.json
+    return jsonify(idor_test(data.get("url",""), data.get("param","id"),
+                              data.get("start",1), data.get("count",10), data.get("token","")))
+
+@app.route("/api/apisec/broken-auth", methods=["POST"])
+def api_broken_auth():
+    from modules.api_security import broken_auth_test
+    data = request.json
+    return jsonify(broken_auth_test(data.get("url",""), data.get("username_field","username"),
+                                     data.get("password_field","password")))
+
+# ─── Mobile Security APIs ────────────────────────────────────────────────────
+
+@app.route("/api/mobile/apk", methods=["POST"])
+def api_apk():
+    from modules.mobile_security import analyze_apk
+    data = request.json
+    b64  = data.get("data","")
+    try:
+        file_bytes = base64.b64decode(b64)
+    except Exception:
+        return jsonify({"error":"Invalid base64"}), 400
+    return jsonify(analyze_apk(file_bytes, data.get("filename","app.apk")))
+
+@app.route("/api/mobile/ipa", methods=["POST"])
+def api_ipa():
+    from modules.mobile_security import analyze_ipa
+    data = request.json
+    b64  = data.get("data","")
+    try:
+        file_bytes = base64.b64decode(b64)
+    except Exception:
+        return jsonify({"error":"Invalid base64"}), 400
+    return jsonify(analyze_ipa(file_bytes, data.get("filename","app.ipa")))
+
+# ─── Log Analyzer APIs ───────────────────────────────────────────────────────
+
+@app.route("/api/logs/analyze", methods=["POST"])
+def api_log_analyze():
+    from modules.log_analyzer import detect_anomalies
+    data = request.json
+    return jsonify(detect_anomalies(data.get("log_text",""), data.get("log_type","auto")))
+
+@app.route("/api/logs/enrich-ips", methods=["POST"])
+def api_log_enrich():
+    from modules.log_analyzer import enrich_ips_from_log
+    return jsonify(enrich_ips_from_log(request.json.get("log_text","")))
+
+# ─── Threat Intelligence APIs ────────────────────────────────────────────────
+
+@app.route("/api/intel/ip", methods=["POST"])
+def api_intel_ip():
+    from modules.threat_intel import ip_reputation
+    data = request.json
+    return jsonify(ip_reputation(data.get("ip",""), data.get("keys",{})))
+
+@app.route("/api/intel/domain", methods=["POST"])
+def api_intel_domain():
+    from modules.threat_intel import domain_reputation
+    data = request.json
+    return jsonify(domain_reputation(data.get("domain",""), data.get("keys",{})))
+
+@app.route("/api/intel/ioc", methods=["POST"])
+def api_intel_ioc():
+    from modules.threat_intel import ioc_lookup
+    data = request.json
+    return jsonify(ioc_lookup(data.get("ioc",""), data.get("type","auto"), data.get("keys",{})))
+
+@app.route("/api/intel/feeds", methods=["POST"])
+def api_intel_feeds():
+    from modules.threat_intel import threat_feed_check
+    return jsonify(threat_feed_check(request.json.get("indicator","")))
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

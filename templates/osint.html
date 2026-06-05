@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}OSINT Intel – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-user-secret" style="color:var(--accent)"></i> OSINT Intelligence{% endblock %}
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="os-email">Email Breach</button>
+    <button class="tab-btn" data-tab="os-pwd">Password Pwned</button>
+    <button class="tab-btn" data-tab="os-github">GitHub Profile</button>
+    <button class="tab-btn" data-tab="os-dns">DNS Recon</button>
+    <button class="tab-btn" data-tab="os-meta">File Metadata</button>
+    <button class="tab-btn" data-tab="os-dark">Dark Web</button>
+  </div>
+
+  <div class="tab-panel active" id="os-email" style="padding:20px">
+    <div class="form-group"><label class="form-label">Email Address</label>
+      <input type="email" id="os-email-input" class="form-control" placeholder="user@example.com"></div>
+    <div class="form-group"><label class="form-label">HIBP API Key (optional but recommended)</label>
+      <input type="password" id="os-hibp-key" class="form-control" placeholder="Get key at https://haveibeenpwned.com/API/Key"></div>
+    <button class="btn btn-primary" onclick="osEmail()"><i class="fas fa-envelope"></i> Check Breaches</button>
+    <div class="output-box" id="os-email-out" style="margin-top:16px"><span class="output-placeholder">Breach results…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="os-pwd" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i> Uses HIBP k-anonymity model — only first 5 chars of SHA-1 hash are sent to API. Your password never leaves locally.</div>
+    <div class="form-group"><label class="form-label">Password to Check</label>
+      <input type="password" id="os-pwd-input" class="form-control" placeholder="Enter password"></div>
+    <button class="btn btn-primary" onclick="osPwd()"><i class="fas fa-key"></i> Check if Pwned</button>
+    <div class="output-box" id="os-pwd-out" style="margin-top:16px"><span class="output-placeholder">Result…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="os-github" style="padding:20px">
+    <div class="form-group"><label class="form-label">GitHub Username</label>
+      <input type="text" id="os-gh-input" class="form-control" placeholder="wouapit999"></div>
+    <button class="btn btn-primary" onclick="osGithub()"><i class="fab fa-github"></i> Footprint Profile</button>
+    <div class="output-box" id="os-gh-out" style="margin-top:16px"><span class="output-placeholder">Profile + repos + secret hints…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="os-dns" style="padding:20px">
+    <div class="form-group"><label class="form-label">Target Domain</label>
+      <input type="text" id="os-dns-input" class="form-control" placeholder="example.com"></div>
+    <button class="btn btn-primary" onclick="osDns()"><i class="fas fa-sitemap"></i> Full DNS Recon</button>
+    <div class="output-box" id="os-dns-out" style="margin-top:16px"><span class="output-placeholder">DNS records, reverse IP, zone transfer…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="os-meta" style="padding:20px">
+    <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i> File processed locally and sent to server for analysis. Max 10MB.</div>
+    <div class="form-group">
+      <label class="form-label">Upload File (PDF, DOCX, JPG, PNG, etc.)</label>
+      <input type="file" id="os-meta-file" class="form-control" accept=".pdf,.docx,.xlsx,.pptx,.jpg,.jpeg,.png,.tiff,.gif">
+    </div>
+    <button class="btn btn-primary" onclick="osMeta()"><i class="fas fa-search"></i> Extract Metadata</button>
+    <div class="output-box" id="os-meta-out" style="margin-top:16px"><span class="output-placeholder">Metadata + EXIF + author info + security findings…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="os-dark" style="padding:20px">
+    <div class="form-group"><label class="form-label">Email / Username / Domain to Search</label>
+      <input type="text" id="os-dark-input" class="form-control" placeholder="user@example.com"></div>
+    <button class="btn btn-primary" onclick="osDark()"><i class="fas fa-skull"></i> Check Dark Web Exposure</button>
+    <div class="output-box" id="os-dark-out" style="margin-top:16px"><span class="output-placeholder">Dark web indicators…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+async function osEmail(){
+  const email=document.getElementById('os-email-input').value.trim();
+  const key=document.getElementById('os-hibp-key').value.trim();
+  if(!email)return alert('Enter an email.');
+  const out=document.getElementById('os-email-out');out.innerHTML='<span class="spinner"></span> Checking HIBP…';
+  const data=await apiPost('/api/osint/email-breach',{email,api_key:key});
+  let html=`<span class="output-line heading">HIBP Check: ${esc(email)}</span>\n`;
+  if(data.error)html+=`<span class="output-line error">✗ ${esc(data.error)}</span>`;
+  else if(data.message)html+=`<span class="output-line success">✓ ${esc(data.message)}</span>`;
+  else{html+=`<span class="output-line warning">⚠ Found in ${data.breach_count} breach(es)</span>\n\n`;
+    (data.breaches||[]).forEach(b=>{html+=`<span class="output-line error">■ ${esc(b.name)} (${esc(b.breach_date)})</span>\n  <span class="output-line info">  Domain: ${esc(b.domain)} | Pwned: ${b.pwn_count.toLocaleString()}</span>\n  <span class="output-line">  Data: ${esc((b.data_classes||[]).join(', '))}</span>\n\n`;});}
+  out.innerHTML=html;
+}
+async function osPwd(){
+  const pwd=document.getElementById('os-pwd-input').value;if(!pwd)return alert('Enter password.');
+  const out=document.getElementById('os-pwd-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/osint/password-pwned',{password:pwd});
+  let html=`<span class="output-line heading">Password Pwned Check</span>\n\n`;
+  if(data.pwned)html+=`<span class="output-line error">✗ PWNED!</span>\n<span class="output-line warning">This password appears <strong>${data.count.toLocaleString()}</strong> times in known breaches.</span>\n<span class="output-line">Change it immediately on all accounts where it's used.</span>`;
+  else if(data.pwned===false)html+=`<span class="output-line success">✓ Not found in HIBP database</span>\n<span class="output-line info">${esc(data.message)}</span>`;
+  else html+=`<span class="output-line error">✗ ${esc(data.error||'unknown error')}</span>`;
+  out.innerHTML=html;
+}
+async function osGithub(){
+  const u=document.getElementById('os-gh-input').value.trim();if(!u)return alert('Enter username.');
+  const out=document.getElementById('os-gh-out');out.innerHTML='<span class="spinner"></span> Fetching profile…';
+  const data=await apiPost('/api/osint/github',{username:u});
+  if(data.error){out.innerHTML=`<span class="output-line error">✗ ${esc(data.error)}</span>`;return;}
+  const p=data.profile||{};
+  let html=`<span class="output-line heading">GitHub: ${esc(u)}</span>\n\n<span class="output-line info">Name: ${esc(p.name||'n/a')}</span>\n<span class="output-line info">Company: ${esc(p.company||'n/a')} | Location: ${esc(p.location||'n/a')}</span>\n<span class="output-line info">Email: ${esc(p.email||'private')} | Twitter: ${esc(p.twitter||'n/a')}</span>\n<span class="output-line info">Repos: ${p.public_repos||0} | Followers: ${p.followers||0} | Created: ${esc(p.created_at||'')}</span>\n\n`;
+  html+=`<span class="output-line heading">Languages: ${esc((data.languages||[]).join(', '))}</span>\n\n<span class="output-line heading">Recent Repos:</span>\n`;
+  (data.repos||[]).slice(0,10).forEach(r=>{html+=`  <span class="output-line success">▸ ${esc(r.name)} (${esc(r.language||'?')}, ${r.stars}★)</span>\n    <span class="output-line">    ${esc(r.description||'')}</span>\n`;});
+  if((data.security_hints||[]).length){html+=`\n<span class="output-line heading">⚠ Security Hints:</span>\n`;
+    data.security_hints.forEach(h=>{html+=`  <span class="output-line warning">  ${esc(h.repo)}: ${esc((h.keywords||[]).join(','))}</span>\n`;});}
+  out.innerHTML=html;
+}
+async function osDns(){
+  const d=document.getElementById('os-dns-input').value.trim();if(!d)return alert('Enter domain.');
+  const out=document.getElementById('os-dns-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/osint/dns-history',{domain:d});
+  renderJSON(out,data,`DNS Recon: ${d}`);
+}
+async function osMeta(){
+  const f=document.getElementById('os-meta-file').files[0];if(!f)return alert('Select a file.');
+  if(f.size>10*1024*1024)return alert('File too large (max 10MB).');
+  const out=document.getElementById('os-meta-out');out.innerHTML='<span class="spinner"></span> Extracting metadata…';
+  const buf=await f.arrayBuffer();const b64=btoa(String.fromCharCode.apply(null,new Uint8Array(buf)));
+  const data=await apiPost('/api/osint/metadata',{filename:f.name,data:b64});
+  let html=`<span class="output-line heading">Metadata: ${esc(f.name)}</span>\n<span class="output-line info">Size: ${data.size_bytes} bytes</span>\n<span class="output-line info">SHA-256: ${esc(data.hashes?.sha256||'')}</span>\n\n`;
+  html+=`<span class="output-line heading">Extracted Metadata:</span>\n`;
+  Object.entries(data.metadata||{}).forEach(([k,v])=>{html+=`  <span class="output-line">${esc(k)}: ${esc(String(v).slice(0,200))}</span>\n`;});
+  if((data.security_findings||[]).length){html+=`\n<span class="output-line heading">⚠ Security Findings:</span>\n`;
+    data.security_findings.forEach(f=>{html+=`  <span class="output-line error">[${esc(f.severity)}] ${esc(f.type)}</span>\n    <span class="output-line">    ${esc(f.detail||'')}</span>\n`;});}
+  out.innerHTML=html;
+}
+async function osDark(){
+  const q=document.getElementById('os-dark-input').value.trim();if(!q)return alert('Enter query.');
+  const out=document.getElementById('os-dark-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/osint/dark-web',{query:q});
+  renderJSON(out,data,`Dark Web Exposure: ${q}`);
+}
+</script>
+{% endblock %}

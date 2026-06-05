@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Vulnerability Management – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-shield-virus" style="color:var(--accent)"></i> Vulnerability Management{% endblock %}
+{% block content %}
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="vm-import">Import Results</button>
+    <button class="tab-btn" data-tab="vm-cve">CVE Correlation</button>
+    <button class="tab-btn" data-tab="vm-exploits">Exploit Suggestions</button>
+    <button class="tab-btn" data-tab="vm-dashboard">Dashboard</button>
+  </div>
+
+  <!-- Import -->
+  <div class="tab-panel active" id="vm-import" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i> Paste or upload scanner output to parse vulnerabilities automatically. Supports Nmap XML, Nikto text, OpenVAS XML, and Nessus XML.</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Scanner Type</label>
+        <select id="vm-scanner-type" class="form-control" onchange="updateImportHint()">
+          <option value="nmap">Nmap XML (-oX output)</option>
+          <option value="nikto">Nikto Text Output</option>
+          <option value="openvas">OpenVAS / Nessus XML</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:flex;align-items:flex-end">
+        <label class="btn btn-secondary" style="cursor:pointer;margin:0">
+          <i class="fas fa-upload"></i> Upload File
+          <input type="file" id="vm-file-input" style="display:none" accept=".xml,.txt,.csv" onchange="loadFile(this)">
+        </label>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Paste Scanner Output</label>
+      <textarea id="vm-input" class="form-control mono" rows="8" placeholder="Paste Nmap XML, Nikto output, or OpenVAS/Nessus XML here…"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="runImport()"><i class="fas fa-file-import"></i> Parse &amp; Import</button>
+    <div class="output-box" id="vm-import-out" style="margin-top:16px"><span class="output-placeholder">Import results will appear here…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <!-- CVE Correlation -->
+  <div class="tab-panel" id="vm-cve" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">CVE IDs (one per line or comma-separated)</label>
+      <textarea id="cve-list" class="form-control mono" rows="5" placeholder="CVE-2021-44228&#10;CVE-2017-0144&#10;CVE-2021-21985"></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="runCVECorrelation()"><i class="fas fa-search"></i> Correlate CVEs</button>
+    <div class="output-box" id="cve-out" style="margin-top:16px"><span class="output-placeholder">CVE details will appear here…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <!-- Exploit Suggestions -->
+  <div class="tab-panel" id="vm-exploits" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Service / CVE / Product Name</label>
+      <input type="text" id="exploit-query" class="form-control" placeholder="apache tomcat  or  CVE-2021-44228  or  ms17-010">
+    </div>
+    <button class="btn btn-primary" onclick="runExploitSearch()"><i class="fas fa-bug"></i> Find Exploits</button>
+    <div class="output-box" id="exploit-out" style="margin-top:16px"><span class="output-placeholder">Exploit suggestions will appear here…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="tab-panel" id="vm-dashboard" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i> Import scanner results first, then click Generate Dashboard to visualize the vulnerability landscape.</div>
+    <button class="btn btn-primary" onclick="runDashboard()"><i class="fas fa-chart-pie"></i> Generate Dashboard</button>
+    <div id="vm-dash-content" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+let importedVulns = [];
+
+function updateImportHint() {
+  const t = document.getElementById('vm-scanner-type').value;
+  const hints = {nmap:'Paste Nmap XML: nmap -sV -oX output.xml target',nikto:'Paste Nikto text output',openvas:'Paste OpenVAS or Nessus XML report'};
+  document.getElementById('vm-input').placeholder = hints[t] || '';
+}
+
+function loadFile(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => { document.getElementById('vm-input').value = e.target.result; };
+  reader.readAsText(file);
+}
+
+async function runImport() {
+  const type = document.getElementById('vm-scanner-type').value;
+  const text = document.getElementById('vm-input').value.trim();
+  if (!text) return alert('Paste scanner output first.');
+  const out = document.getElementById('vm-import-out');
+  out.innerHTML = '<span class="spinner"></span> Parsing…';
+  const endpoints = {nmap:'/api/vuln/import-nmap', nikto:'/api/vuln/import-nikto', openvas:'/api/vuln/import-openvas'};
+  const body = type === 'nikto' ? {text} : {xml:text};
+  const data = await apiPost(endpoints[type], body);
+  if (!data) return;
+  if (data.vulnerabilities) importedVulns = data.vulnerabilities;
+  if (data.findings) importedVulns = data.findings;
+  renderJSON(out, data, `Import Results (${type.toUpperCase()})`);
+}
+
+async function runCVECorrelation() {
+  const raw = document.getElementById('cve-list').value.trim();
+  const cves = raw.split(/[\n,]/).map(s=>s.trim()).filter(s=>s.startsWith('CVE'));
+  if (!cves.length) return alert('Enter at least one CVE ID.');
+  const out = document.getElementById('cve-out');
+  out.innerHTML = '<span class="spinner"></span> Looking up CVEs…';
+  const data = await apiPost('/api/vuln/correlate-cves', {cves});
+  let html = `<span class="output-line heading">CVE Correlation Results</span>\n\n`;
+  (data.cves||[]).forEach(c => {
+    const cls = c.severity==='CRITICAL'?'error':c.severity==='HIGH'?'warning':'info';
+    html += `<span class="output-line heading">${esc(c.id)}</span> <span class="output-line ${cls}">${esc(c.severity||'')} CVSS:${esc(c.cvss_score||'?')}</span>\n`;
+    html += `<span class="output-line">${esc(c.description||c.error||'')}</span>\n\n`;
+  });
+  out.innerHTML = html;
+}
+
+async function runExploitSearch() {
+  const q = document.getElementById('exploit-query').value.trim();
+  if (!q) return alert('Enter a search term.');
+  const out = document.getElementById('exploit-out');
+  out.innerHTML = '<span class="spinner"></span> Searching…';
+  const data = await apiPost('/api/vuln/suggest-exploits', {query:q});
+  let html = `<span class="output-line heading">Exploit Suggestions: ${esc(q)}</span>\n\n`;
+  const exploits = data.exploits||[];
+  if (exploits.length) {
+    exploits.forEach(e => {
+      html += `<span class="output-line warning">■ ${esc(e.title||e.id||'')}</span>\n`;
+      html += `  <span class="output-line info">  EDB-ID: ${esc(String(e.id))} | ${esc(e.type||'')} | ${esc(e.platform||'')}</span>\n`;
+      html += `  <span class="output-line">  ${esc(e.url||'')}</span>\n\n`;
+    });
+  } else {
+    html += '<span class="output-line info">No Exploit-DB results. Check manually: https://www.exploit-db.com</span>\n';
+  }
+  const msf = data.metasploit_modules||[];
+  if (msf.length) {
+    html += '<span class="output-line heading">Metasploit Modules:</span>\n';
+    msf.forEach(m => { html += `  <span class="output-line success">  use ${esc(m.module)}</span>\n`; });
+  }
+  out.innerHTML = html;
+}
+
+async function runDashboard() {
+  const container = document.getElementById('vm-dash-content');
+  if (!importedVulns.length) {
+    const dummy = [{severity:'CRITICAL',host:'192.168.1.10',name:'EternalBlue',severity_score:9.8,cves:['CVE-2017-0144']},{severity:'HIGH',host:'192.168.1.12',name:'Apache Log4Shell',severity_score:10,cves:['CVE-2021-44228']},{severity:'MEDIUM',host:'192.168.1.10',name:'Missing HSTS',severity_score:5.3,cves:[]},{severity:'LOW',host:'192.168.1.15',name:'Info Disclosure',severity_score:2.1,cves:[]},];
+    importedVulns = dummy;
+    container.innerHTML = '<div class="alert alert-info"><i class="fas fa-info-circle"></i> Using demo data. Import real results for accurate dashboard.</div>';
+  }
+  const data = await apiPost('/api/vuln/dashboard', {vulnerabilities: importedVulns});
+  const s = data.summary||{};
+  container.innerHTML += `
+    <div class="stats-grid">
+      ${[['CRITICAL',s.CRITICAL||0,'var(--critical)','#ffd700'],['HIGH',s.HIGH||0,'#7a2020','#ffb3b3'],['MEDIUM',s.MEDIUM||0,'#5a3a00','var(--warning)'],['LOW',s.LOW||0,'var(--surface2)','var(--success)'],['INFO',s.INFO||0,'var(--surface2)','var(--info)']].map(([l,c,bg,col])=>`
+      <div class="stat-card"><div class="stat-icon" style="background:${bg};color:${col};font-size:1.6em;font-weight:800">${c}</div><div class="stat-info"><div style="color:${col};font-size:.8em;font-weight:700">${l}</div><div class="label">Findings</div></div></div>`).join('')}
+    </div>
+    <div class="grid-2" style="margin-top:12px">
+      <div class="card"><div class="card-title"><i class="fas fa-globe"></i> Affected Hosts</div><ul style="list-style:none;margin-top:8px">${(data.affected_hosts||[]).map(h=>`<li style="padding:4px 0;color:var(--teal);font-size:.88em">▸ ${esc(h)}</li>`).join('')}</ul></div>
+      <div class="card"><div class="card-title"><i class="fas fa-exclamation-triangle"></i> Top Critical Findings</div><ul style="list-style:none;margin-top:8px">${(data.top_critical||[]).slice(0,5).map(v=>`<li style="padding:4px 0;font-size:.85em"><span style="color:var(--danger)">[${esc(v.severity)}]</span> ${esc(v.name||v.title||'')}</li>`).join('')}</ul></div>
+    </div>
+    <div class="card" style="margin-top:12px"><div class="card-title"><i class="fas fa-thermometer-half"></i> Risk Score: <span style="color:${data.risk_score>70?'var(--danger)':data.risk_score>40?'var(--warning)':'var(--success)'}">${data.risk_score}/100</span></div></div>`;
+}
+
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+</script>
+{% endblock %}
