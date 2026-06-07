@@ -29,62 +29,156 @@
       <a href="{{ url_for('dashboard') }}"><i class="fas fa-tachometer-alt"></i><span>Dashboard</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'autoscan' %}active{% endif %}" style="margin:6px 8px">
-      <a href="{{ url_for('autoscan') }}" style="background:linear-gradient(135deg,rgba(212,160,23,.22),rgba(212,160,23,.08));border:1px solid rgba(212,160,23,.35);color:var(--gold-light);border-radius:var(--radius)"><i class="fas fa-crosshairs" style="color:var(--gold-light)"></i><span>⚡ Auto Scan</span></a>
+      <a href="{{ url_for('autoscan') }}" style="background:linear-gradient(135deg,rgba(212,160,23,.22),rgba(212,160,23,.08));border:1px solid rgba(212,160,23,.35);color:var(--gold-light);border-radius:var(--radius)"><i class="fas fa-crosshairs" style="color:var(--gold-light)"></i><span>Auto Scan</span></a>
     </li>
-    <li class="nav-section"><span>RECONNAISSANCE</span></li>
+
+    <!-- ═══════════ IT SECURITY DOMAIN ═══════════ -->
+    <li class="nav-domain it">
+      <i class="fas fa-laptop-code"></i> IT SECURITY
+    </li>
+
+    <li class="nav-section"><span>Reconnaissance &amp; Scanning</span></li>
     <li class="nav-item {% if request.endpoint == 'recon' %}active{% endif %}">
       <a href="{{ url_for('recon') }}"><i class="fas fa-search"></i><span>Recon Suite</span></a>
     </li>
-    <li class="nav-section"><span>SCANNING</span></li>
     <li class="nav-item {% if request.endpoint == 'web_scanner' %}active{% endif %}">
       <a href="{{ url_for('web_scanner') }}"><i class="fas fa-globe"></i><span>Web Scanner</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'network' %}active{% endif %}">
       <a href="{{ url_for('network') }}"><i class="fas fa-network-wired"></i><span>Network Tools</span></a>
     </li>
-    <li class="nav-section"><span>EXPLOITATION</span></li>
+
+    <li class="nav-section"><span>Exploitation</span></li>
     <li class="nav-item {% if request.endpoint == 'passwords' %}active{% endif %}">
       <a href="{{ url_for('passwords') }}"><i class="fas fa-key"></i><span>Password Tools</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'exploits' %}active{% endif %}">
       <a href="{{ url_for('exploits') }}"><i class="fas fa-bug"></i><span>Exploits &amp; Payloads</span></a>
     </li>
-    <li class="nav-section"><span>VULNERABILITY</span></li>
+
+    <li class="nav-section"><span>Vulnerability &amp; Intel</span></li>
     <li class="nav-item {% if request.endpoint == 'vuln_management' %}active{% endif %}">
       <a href="{{ url_for('vuln_management') }}"><i class="fas fa-shield-virus"></i><span>Vuln Management</span></a>
     </li>
-    <li class="nav-section"><span>INTELLIGENCE</span></li>
     <li class="nav-item {% if request.endpoint == 'osint_page' %}active{% endif %}">
       <a href="{{ url_for('osint_page') }}"><i class="fas fa-user-secret"></i><span>OSINT Intel</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'threat_intel_page' %}active{% endif %}">
       <a href="{{ url_for('threat_intel_page') }}"><i class="fas fa-satellite"></i><span>Threat Intel</span></a>
     </li>
-    <li class="nav-section"><span>ANALYSIS</span></li>
+
+    <li class="nav-section"><span>Analysis</span></li>
     <li class="nav-item {% if request.endpoint == 'malware_page' %}active{% endif %}">
       <a href="{{ url_for('malware_page') }}"><i class="fas fa-biohazard"></i><span>Malware Analysis</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'log_analyzer_page' %}active{% endif %}">
-      <a href="{{ url_for('log_analyzer_page') }}"><i class="fas fa-chart-bar"></i><span>Log Analyzer</span></a>
+      <a href="{{ url_for('log_analyzer_page') }}"><i class="fas fa-chart-bar"></i><span>Log / SIEM</span></a>
     </li>
-    <li class="nav-section"><span>ADVANCED TESTING</span></li>
+
+    <li class="nav-section"><span>Application Security</span></li>
     <li class="nav-item {% if request.endpoint == 'api_security_page' %}active{% endif %}">
       <a href="{{ url_for('api_security_page') }}"><i class="fas fa-plug"></i><span>API Security</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'cloud_security_page' %}active{% endif %}">
-      <a href="{{ url_for('cloud_security_page') }}"><i class="fas fa-cloud"></i><span>Cloud Security</span></a>
+      <a href="{{ url_for('cloud_security_page') }}"><i class="fas fa-cloud"></i><span>Cloud &amp; Containers</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'mobile_security_page' %}active{% endif %}">
       <a href="{{ url_for('mobile_security_page') }}"><i class="fas fa-mobile-alt"></i><span>Mobile Security</span></a>
     </li>
     <li class="nav-item {% if request.endpoint == 'wireless_page' %}active{% endif %}">
-      <a href="{{ url_for('wireless_page') }}"><i class="fas fa-wifi"></i><span>Wireless Security</span></a>
+      <a href="{{ url_for('wireless_page') }}"><i class="fas fa-wifi"></i><span>WiFi Security</span></a>
     </li>
-    <li class="nav-section"><span>REPORTING</span></li>
+
+    <!-- ═══════════ TELECOM SECURITY DOMAIN ═══════════ -->
+    <li class="nav-domain telecom">
+      <i class="fas fa-broadcast-tower"></i> TELECOM SECURITY
+    </li>
+    <li class="nav-item {% if request.endpoint == 'telecom_security_page' %}active{% endif %}">
+      <a href="{{ url_for('telecom_security_page') }}"><i class="fas fa-shield-alt"></i><span>Telecom Suite</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-ss7"><i class="fas fa-angle-right"></i><span>SS7 (2G/3G)</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-diameter"><i class="fas fa-angle-right"></i><span>Diameter (4G)</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-5g"><i class="fas fa-angle-right"></i><span>5G &amp; IMS</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-sip"><i class="fas fa-angle-right"></i><span>SIP / VoIP</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-imsi"><i class="fas fa-angle-right"></i><span>IMSI Catcher</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-ossbss"><i class="fas fa-angle-right"></i><span>OSS / BSS</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-bgp"><i class="fas fa-angle-right"></i><span>BGP / Transport</span></a>
+    </li>
+    <li class="nav-sub-item">
+      <a href="{{ url_for('telecom_security_page') }}#tc-sim"><i class="fas fa-angle-right"></i><span>SIM / eSIM</span></a>
+    </li>
+
+    <!-- ═══════════ REPORTING ═══════════ -->
+    <li class="nav-domain reporting">
+      <i class="fas fa-file-alt"></i> REPORTING
+    </li>
     <li class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
-      <a href="{{ url_for('reports') }}"><i class="fas fa-file-alt"></i><span>Reports</span></a>
+      <a href="{{ url_for('reports') }}"><i class="fas fa-file-pdf"></i><span>Reports (PDF / DOCX)</span></a>
     </li>
   </ul>
+
+  <style>
+  /* ── Domain headers ───────────────────────────────────────────── */
+  .nav-domain {
+    margin: 18px 8px 6px;
+    padding: 10px 12px;
+    font-size: 0.72em;
+    font-weight: 800;
+    letter-spacing: 2px;
+    border-radius: var(--radius);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .nav-domain.it {
+    background: linear-gradient(90deg, rgba(91,155,213,0.15), rgba(91,155,213,0.04));
+    color: #8ab8e0;
+    border-left: 3px solid #5b9bd5;
+  }
+  .nav-domain.telecom {
+    background: linear-gradient(90deg, rgba(212,160,23,0.18), rgba(212,160,23,0.04));
+    color: var(--gold-light);
+    border-left: 3px solid var(--accent);
+  }
+  .nav-domain.reporting {
+    background: linear-gradient(90deg, rgba(168,218,220,0.12), rgba(168,218,220,0.03));
+    color: var(--teal);
+    border-left: 3px solid var(--teal);
+  }
+  .nav-domain i { font-size: 1.1em; }
+
+  /* ── Sub-items under telecom anchors ──────────────────────────── */
+  .nav-sub-item a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px 6px 28px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.82em;
+    border-radius: var(--radius);
+    margin: 1px 8px;
+    transition: background var(--trans), color var(--trans);
+    white-space: nowrap;
+  }
+  .nav-sub-item a:hover { background: rgba(212,160,23,0.08); color: var(--teal); }
+  .nav-sub-item a i { color: var(--accent); font-size: 0.7em; width: 8px; }
+  </style>
 
   <div class="sidebar-footer">
     <span class="status-dot"></span> Authorized Testing Only

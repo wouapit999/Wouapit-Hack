@@ -313,14 +313,198 @@
   </div>
 </div>
 
-<!-- All Tools Grid -->
-<div class="section-title" style="margin-top:8px"><i class="fas fa-tools"></i> All Modules</div>
-<div class="tool-grid">
+<!-- ═════════════════════════════════════════════════════════════════
+     DOMAIN SELECTOR — IT vs Telecom
+     ═════════════════════════════════════════════════════════════════ -->
+<div class="domain-banner">
+  <div class="domain-banner-card domain-it">
+    <div class="domain-banner-icon"><i class="fas fa-laptop-code"></i></div>
+    <div class="domain-banner-body">
+      <div class="domain-banner-eyebrow">IT DOMAIN</div>
+      <h3>Enterprise Information Security</h3>
+      <p>Web applications, APIs, cloud workloads, mobile apps, endpoints, network infrastructure, SIEM &amp; SOC.</p>
+      <a href="#it-modules" class="domain-banner-cta">Explore IT Tools <i class="fas fa-arrow-down"></i></a>
+    </div>
+  </div>
+  <div class="domain-banner-card domain-telecom">
+    <div class="domain-banner-icon"><i class="fas fa-broadcast-tower"></i></div>
+    <div class="domain-banner-body">
+      <div class="domain-banner-eyebrow">TELECOM DOMAIN</div>
+      <h3>Carrier &amp; Mobile Network Security</h3>
+      <p>SS7, Diameter, 5G/IMS, SIP/VoIP, OSS/BSS, BGP, SIM/eSIM, IMSI catcher detection.</p>
+      <a href="#telecom-modules" class="domain-banner-cta">Explore Telecom Tools <i class="fas fa-arrow-down"></i></a>
+    </div>
+  </div>
+</div>
+
+<style>
+.domain-banner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 8px 0 28px;
+}
+@media (max-width: 900px) { .domain-banner { grid-template-columns: 1fr; } }
+
+.domain-banner-card {
+  display: flex;
+  gap: 18px;
+  padding: 22px 22px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border2);
+  position: relative;
+  overflow: hidden;
+  transition: transform .25s ease, box-shadow .25s ease;
+}
+.domain-banner-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.domain-banner-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+}
+.domain-it {
+  background: linear-gradient(135deg, rgba(91,155,213,0.06), rgba(91,155,213,0.02));
+}
+.domain-it::before {
+  background: linear-gradient(90deg, transparent, #5b9bd5, transparent);
+}
+.domain-telecom {
+  background: linear-gradient(135deg, rgba(212,160,23,0.08), rgba(212,160,23,0.02));
+}
+.domain-telecom::before {
+  background: linear-gradient(90deg, transparent, var(--accent), var(--gold-light), transparent);
+}
+
+.domain-banner-icon {
+  width: 64px; height: 64px;
+  border-radius: 12px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8em;
+}
+.domain-it .domain-banner-icon {
+  background: linear-gradient(135deg, rgba(91,155,213,0.2), rgba(91,155,213,0.05));
+  color: #8ab8e0;
+  border: 1px solid rgba(91,155,213,0.3);
+}
+.domain-telecom .domain-banner-icon {
+  background: linear-gradient(135deg, rgba(212,160,23,0.22), rgba(212,160,23,0.06));
+  color: var(--gold-light);
+  border: 1px solid rgba(212,160,23,0.3);
+}
+
+.domain-banner-eyebrow {
+  font-size: 0.7em;
+  font-weight: 800;
+  letter-spacing: 2px;
+  margin-bottom: 4px;
+}
+.domain-it .domain-banner-eyebrow { color: #5b9bd5; }
+.domain-telecom .domain-banner-eyebrow { color: var(--accent); }
+
+.domain-banner-body h3 {
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 6px;
+  letter-spacing: -0.2px;
+}
+.domain-banner-body p {
+  font-size: 0.84em;
+  color: var(--muted);
+  line-height: 1.55;
+  margin-bottom: 12px;
+}
+
+.domain-banner-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.82em;
+  font-weight: 700;
+  text-decoration: none;
+  transition: all 0.2s ease;
+}
+.domain-it .domain-banner-cta {
+  background: rgba(91,155,213,0.15);
+  color: #8ab8e0;
+  border: 1px solid rgba(91,155,213,0.3);
+}
+.domain-it .domain-banner-cta:hover { background: rgba(91,155,213,0.25); }
+.domain-telecom .domain-banner-cta {
+  background: rgba(212,160,23,0.18);
+  color: var(--gold-light);
+  border: 1px solid rgba(212,160,23,0.35);
+}
+.domain-telecom .domain-banner-cta:hover { background: rgba(212,160,23,0.28); }
+
+/* Domain section headers */
+.domain-section-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 30px 0 14px;
+  padding: 12px 16px;
+  border-radius: var(--radius);
+  font-weight: 700;
+  border-left: 4px solid;
+}
+.domain-section-header.it {
+  background: linear-gradient(90deg, rgba(91,155,213,0.10), transparent);
+  border-color: #5b9bd5;
+}
+.domain-section-header.telecom {
+  background: linear-gradient(90deg, rgba(212,160,23,0.12), transparent);
+  border-color: var(--accent);
+}
+.domain-section-header h2 {
+  font-size: 1.05em;
+  letter-spacing: 0.5px;
+  color: var(--text);
+  margin: 0;
+}
+.domain-section-header .badge-count {
+  margin-left: auto;
+  background: var(--surface2);
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.78em;
+  color: var(--muted);
+}
+.domain-section-header.it i { color: #5b9bd5; font-size: 1.3em; }
+.domain-section-header.telecom i { color: var(--accent); font-size: 1.3em; }
+</style>
+
+<!-- ─── Universal tools ─────────────────────────────────────────── -->
+<div class="section-title" style="margin-top:8px"><i class="fas fa-bolt"></i> Universal Tools</div>
+<div class="tool-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr))">
   <a class="tool-card" href="/autoscan">
     <div class="tool-card-icon"><i class="fas fa-crosshairs"></i></div>
-    <h3>⚡ Auto Scan</h3>
+    <h3>Auto Scan</h3>
     <p>One-target full scan with Black/Gray/White hat modes — runs all tools and auto-generates reports.</p>
   </a>
+  <a class="tool-card" href="/reports">
+    <div class="tool-card-icon"><i class="fas fa-file-pdf"></i></div>
+    <h3>Report Generator</h3>
+    <p>PDF / DOCX / HTML reports with Bouquet Innovation branding — pentest and remediation reports.</p>
+  </a>
+</div>
+
+<!-- ─── IT SECURITY MODULES ─────────────────────────────────────── -->
+<div class="domain-section-header it" id="it-modules">
+  <i class="fas fa-laptop-code"></i>
+  <h2>IT Security Modules</h2>
+  <span class="badge-count">13 modules</span>
+</div>
+<div class="tool-grid">
   <a class="tool-card" href="/recon">
     <div class="tool-card-icon"><i class="fas fa-search"></i></div>
     <h3>Reconnaissance Suite</h3>
@@ -391,10 +575,54 @@
     <h3>Exploits &amp; Payloads</h3>
     <p>CVE lookup via NVD, reverse/bind shell generators, web shells, XSS &amp; SQLi payloads.</p>
   </a>
-  <a class="tool-card" href="/reports">
-    <div class="tool-card-icon"><i class="fas fa-file-alt"></i></div>
-    <h3>Report Generator</h3>
-    <p>PDF / DOCX / HTML reports with Bouquet Innovation branding, findings &amp; remediation.</p>
+</div>
+
+<!-- ─── TELECOM SECURITY MODULES ────────────────────────────────── -->
+<div class="domain-section-header telecom" id="telecom-modules">
+  <i class="fas fa-broadcast-tower"></i>
+  <h2>Telecom Security Modules</h2>
+  <span class="badge-count">8 sub-modules</span>
+</div>
+<div class="tool-grid">
+  <a class="tool-card" href="/telecom-security#tc-ss7">
+    <div class="tool-card-icon"><i class="fas fa-shield-alt"></i></div>
+    <h3>SS7 / SIGTRAN Security</h3>
+    <p>2G/3G signalling threat catalogue: ATI, ISD, SRI-SM, UpdateLocation, USSD spoofing — with GSMA FS.11 mitigations.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-diameter">
+    <div class="tool-card-icon"><i class="fas fa-network-wired"></i></div>
+    <h3>Diameter (4G/LTE) Security</h3>
+    <p>S6a/S9/Rx/Gx threats: AIR disclosure, ULR hijack, CLR/IDR/NOR abuse. DEA / DRA / topology hiding controls.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-5g">
+    <div class="tool-card-icon"><i class="fas fa-satellite-dish"></i></div>
+    <h3>5G &amp; IMS Security</h3>
+    <p>3GPP TS 33.501 checklist for SBA, SEPP, SCP, SUCI, IMS-AKA, VoLTE/VoNR. NESAS / FS.20 / FS.36 aligned.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-sip">
+    <div class="tool-card-icon"><i class="fas fa-phone"></i></div>
+    <h3>SIP / VoIP Security</h3>
+    <p>Live SIP server probe + OPTIONS enumeration. Asterisk/FreeSWITCH version detection. SBC &amp; SRTP controls.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-imsi">
+    <div class="tool-card-icon"><i class="fas fa-radar"></i></div>
+    <h3>IMSI Catcher Detection</h3>
+    <p>Stingray/rogue base-station indicators: 2G downgrade, LAC anomalies, A5/0 encryption, abnormal signal patterns.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-ossbss">
+    <div class="tool-card-icon"><i class="fas fa-sitemap"></i></div>
+    <h3>OSS / BSS Security</h3>
+    <p>NMS, EMS, Charging, CRM, Service Activation assessment. ISO 27011, GSMA NESAS, FS.18 aligned.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-bgp">
+    <div class="tool-card-icon"><i class="fas fa-route"></i></div>
+    <h3>BGP / Transport Security</h3>
+    <p>ASN lookup, prefix announcement check, RPKI/ROA validation, MANRS compliance recommendations.</p>
+  </a>
+  <a class="tool-card" href="/telecom-security#tc-sim">
+    <div class="tool-card-icon"><i class="fas fa-sim-card"></i></div>
+    <h3>SIM / eSIM Security</h3>
+    <p>SIM swap, SIMjacker/WIBattack, OTA abuse, eSIM profile hijack, Ki management. GSMA SGP.21/22 guidance.</p>
   </a>
 </div>
 {% endblock %}

@@ -1,0 +1,269 @@
+{% extends "base.html" %}
+{% block title %}Telecom Security – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-broadcast-tower" style="color:var(--accent)"></i> Telecom Security{% endblock %}
+{% block content %}
+<div class="alert alert-warning">
+  <i class="fas fa-exclamation-triangle"></i>
+  <div><strong>Telecom Infrastructure Testing.</strong> SS7, Diameter, SIP, and OSS/BSS assessments must be performed only on networks you operate or are explicitly authorised to test. Most telecom signaling testing requires interconnect access or lab equipment — this module provides framework-based assessment, threat catalogues, and a live SIP probe.</div>
+</div>
+
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="tc-ss7">SS7 (2G/3G)</button>
+    <button class="tab-btn" data-tab="tc-diameter">Diameter (4G)</button>
+    <button class="tab-btn" data-tab="tc-5g">5G &amp; IMS</button>
+    <button class="tab-btn" data-tab="tc-sip">SIP / VoIP</button>
+    <button class="tab-btn" data-tab="tc-imsi">IMSI Catcher</button>
+    <button class="tab-btn" data-tab="tc-ossbss">OSS / BSS</button>
+    <button class="tab-btn" data-tab="tc-bgp">BGP &amp; Transport</button>
+    <button class="tab-btn" data-tab="tc-sim">SIM / eSIM</button>
+  </div>
+
+  <!-- SS7 -->
+  <div class="tab-panel active" id="tc-ss7" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">Assessment of common SS7/SIGTRAN attack vectors against 2G/3G core network. Maps to GSMA FS.11 categories.</p>
+    <button class="btn btn-primary" onclick="tcSS7()"><i class="fas fa-shield-alt"></i> Generate SS7 Threat Report</button>
+    <div id="tc-ss7-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- Diameter -->
+  <div class="tab-panel" id="tc-diameter" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">4G/LTE Diameter signalling threats on S6a, S9, Rx, Gx interfaces.</p>
+    <button class="btn btn-primary" onclick="tcDiameter()"><i class="fas fa-shield-alt"></i> Generate Diameter Threat Report</button>
+    <div id="tc-diameter-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- 5G/IMS -->
+  <div class="tab-panel" id="tc-5g" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">5G Service-Based Architecture, IMS, VoLTE/VoNR security checklist (3GPP TS 33.501).</p>
+    <button class="btn btn-primary" onclick="tc5g()"><i class="fas fa-shield-alt"></i> 5G / IMS Checklist</button>
+    <div id="tc-5g-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- SIP / VoIP -->
+  <div class="tab-panel" id="tc-sip" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">SIP Server Host / IP</label>
+        <input type="text" id="tc-sip-host" class="form-control" placeholder="sip.example.com  or  10.0.0.1"></div>
+      <div class="form-group"><label class="form-label">UDP Port</label>
+        <input type="number" id="tc-sip-port" class="form-control" value="5060" min="1" max="65535"></div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="tcSipScan()"><i class="fas fa-search"></i> Probe SIP Server</button>
+      <button class="btn btn-secondary" onclick="tcVoipControls()"><i class="fas fa-list-check"></i> Best Practice Controls</button>
+    </div>
+    <div class="output-box" id="tc-sip-out" style="margin-top:16px"><span class="output-placeholder">SIP probe + VoIP recommendations…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <!-- IMSI Catcher -->
+  <div class="tab-panel" id="tc-imsi" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">Detection indicators for rogue base stations / Stingray-class devices.</p>
+    <button class="btn btn-primary" onclick="tcImsi()"><i class="fas fa-radar"></i> Show Indicators &amp; Tools</button>
+    <div id="tc-imsi-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- OSS / BSS -->
+  <div class="tab-panel" id="tc-ossbss" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">Security assessment framework for NMS, EMS, Charging/Billing, CRM, and Service Activation systems.</p>
+    <button class="btn btn-primary" onclick="tcOssBss()"><i class="fas fa-sitemap"></i> Generate OSS/BSS Assessment</button>
+    <div id="tc-ossbss-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- BGP -->
+  <div class="tab-panel" id="tc-bgp" style="padding:20px">
+    <div class="form-group">
+      <label class="form-label">Autonomous System Number</label>
+      <input type="text" id="tc-bgp-asn" class="form-control" placeholder="AS15169  or  15169">
+    </div>
+    <button class="btn btn-primary" onclick="tcBgp()"><i class="fas fa-route"></i> BGP / RPKI Check</button>
+    <div id="tc-bgp-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- SIM / eSIM -->
+  <div class="tab-panel" id="tc-sim" style="padding:20px">
+    <p style="color:var(--muted);font-size:.9em;margin-bottom:12px">SIM swap, SIMjacker, eSIM provisioning, OTA, and personalisation security overview.</p>
+    <button class="btn btn-primary" onclick="tcSim()"><i class="fas fa-sim-card"></i> SIM / eSIM Threats</button>
+    <div id="tc-sim-out" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function sevBadge(s){return `<span class="badge badge-${(s||'info').toLowerCase()}">${esc(s||'')}</span>`;}
+
+function renderThreatList(container, data, threatKey){
+  const threats = data[threatKey] || [];
+  container.innerHTML = `
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-icon red"><i class="fas fa-bug"></i></div><div class="stat-info"><div class="number">${threats.length}</div><div class="label">Threats Catalogued</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-skull"></i></div><div class="stat-info"><div class="number">${threats.filter(t=>t.severity==='CRITICAL').length}</div><div class="label">Critical</div></div></div>
+    <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-exclamation-triangle"></i></div><div class="stat-info"><div class="number">${threats.filter(t=>t.severity==='HIGH').length}</div><div class="label">High</div></div></div>
+  </div>
+  <div class="card"><div class="card-title"><i class="fas fa-list"></i> Threat Catalogue</div>
+    ${threats.map(t=>`
+      <div style="padding:14px;background:var(--surface2);margin:10px 0;border-left:3px solid ${t.severity==='CRITICAL'?'var(--critical)':t.severity==='HIGH'?'var(--danger)':'var(--warning)'};border-radius:4px">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+          <strong style="color:var(--gold-light);font-size:.95em">${esc(t.attack||t.threat||'')}</strong>
+          ${sevBadge(t.severity)}
+        </div>
+        ${t.command?`<div class="mono" style="font-size:.78em;color:var(--accent);margin-top:6px">${esc(t.command)}</div>`:''}
+        <div style="margin-top:8px;font-size:.86em;color:var(--text)">${esc(t.description||'')}</div>
+        ${t.impact?`<div style="margin-top:6px;font-size:.84em;color:var(--muted)"><strong>Impact:</strong> ${esc(t.impact)}</div>`:''}
+        <div style="margin-top:6px;font-size:.84em;color:var(--accent)"><strong>→</strong> ${esc(t.mitigation||'')}</div>
+      </div>`).join('')}
+  </div>
+  ${data.recommendations?`<div class="card"><div class="card-title"><i class="fas fa-lightbulb"></i> Recommendations</div>
+    <ul style="list-style:none;margin-top:8px">${data.recommendations.map(r=>`<li style="padding:6px 0;font-size:.86em;color:var(--text)">▸ ${esc(r)}</li>`).join('')}</ul></div>`:''}`;
+}
+
+async function tcSS7(){
+  const c=document.getElementById('tc-ss7-out');c.innerHTML='<div class="card"><span class="spinner"></span> Generating SS7 threat report…</div>';
+  const data=await apiPost('/api/telecom/ss7',{network_type:'operator'});
+  renderThreatList(c,data,'threats');
+  // Add filter categories
+  c.innerHTML += `<div class="card"><div class="card-title"><i class="fas fa-filter"></i> GSMA Filter Categories</div>
+    ${Object.entries(data.filter_categories||{}).map(([k,v])=>`
+      <div style="padding:10px;background:var(--surface2);margin:8px 0;border-radius:4px;font-size:.85em">
+        <strong style="color:var(--accent)">${esc(k)}</strong> — ${esc(v.name)} <span class="badge badge-info" style="float:right">${esc(v.status)}</span>
+        <div style="margin-top:4px;color:var(--muted)">${esc(v.description)}</div></div>`).join('')}</div>`;
+}
+
+async function tcDiameter(){
+  const c=document.getElementById('tc-diameter-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/telecom/diameter',{});
+  renderThreatList(c,data,'threats');
+  c.innerHTML += `<div class="card"><div class="card-title"><i class="fas fa-cogs"></i> Recommended Controls</div>
+    ${(data.controls||[]).map(c2=>`<div style="padding:8px;font-size:.86em;border-bottom:1px solid var(--border2)"><strong style="color:var(--accent)">${esc(c2.control)}</strong> — <span style="color:var(--muted)">${esc(c2.purpose)}</span></div>`).join('')}</div>`;
+}
+
+async function tc5g(){
+  const c=document.getElementById('tc-5g-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/telecom/5g-ims',{});
+  let html='';
+  Object.entries(data.categories||{}).forEach(([cat,items])=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-shield-alt"></i> ${esc(cat)}</div>
+      <table class="data-table" style="margin-top:10px"><tr><th>Check</th><th>Specification</th><th>Status</th></tr>
+      ${items.map(i=>`<tr><td>${esc(i.check)}</td><td class="mono" style="font-size:.78em">${esc(i.spec)}</td><td><span class="badge badge-${i.status==='REQUIRED'?'high':i.status==='RECOMMENDED'?'medium':'info'}">${esc(i.status)}</span></td></tr>`).join('')}
+      </table></div>`;
+  });
+  html += `<div class="grid-2">
+    <div class="card"><div class="card-title"><i class="fas fa-book"></i> Frameworks</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.frameworks||[]).map(f=>`<li style="padding:4px 0;color:var(--teal)">▸ ${esc(f)}</li>`).join('')}</ul></div>
+    <div class="card"><div class="card-title"><i class="fas fa-lightbulb"></i> Recommendations</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.recommendations||[]).map(r=>`<li style="padding:4px 0">▸ ${esc(r)}</li>`).join('')}</ul></div></div>`;
+  c.innerHTML = html;
+}
+
+async function tcSipScan(){
+  const h=document.getElementById('tc-sip-host').value.trim();
+  if(!h)return alert('Enter SIP host.');
+  const out=document.getElementById('tc-sip-out');out.innerHTML='<span class="spinner"></span> Probing SIP…';
+  const data=await apiPost('/api/telecom/sip-scan',{host:h,port:parseInt(document.getElementById('tc-sip-port').value)});
+  let html=`<span class="output-line heading">SIP Probe: ${esc(h)}:${data.port||5060}</span>\n\n`;
+  if(data.error)html+=`<span class="output-line error">✗ ${esc(data.error)}</span>`;
+  else if(!data.responsive)html+=`<span class="output-line warning">⚠ No response</span>`;
+  else{
+    html+=`<span class="output-line success">✓ Responsive</span>\n\n`;
+    Object.entries(data.info||{}).forEach(([k,v])=>{html+=`<span class="output-line info">${esc(k)}: ${esc(String(v))}</span>\n`;});
+    html+=`\n`;
+    (data.findings||[]).forEach(f=>{
+      const c=f.severity==='HIGH'||f.severity==='CRITICAL'?'error':f.severity==='MEDIUM'?'warning':'info';
+      html+=`<span class="output-line ${c}">[${esc(f.severity)}] ${esc(f.type)}</span>\n`;
+      if(f.description)html+=`  <span class="output-line">${esc(f.description)}</span>\n`;
+      if(f.mitigation)html+=`  <span class="output-line info">→ ${esc(f.mitigation)}</span>\n\n`;
+    });
+  }
+  out.innerHTML=html;
+}
+
+async function tcVoipControls(){
+  const out=document.getElementById('tc-sip-out');out.innerHTML='<span class="spinner"></span>';
+  const data=await apiPost('/api/telecom/voip-controls',{});
+  let html=`<span class="output-line heading">${esc(data.category||'VoIP Controls')}</span>\n\n`;
+  (data.controls||[]).forEach(c=>{
+    html+=`<span class="output-line success">▸ ${esc(c.control)}</span>\n  <span class="output-line">  ${esc(c.rationale)}</span>\n\n`;
+  });
+  out.innerHTML=html;
+}
+
+async function tcImsi(){
+  const c=document.getElementById('tc-imsi-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/telecom/imsi-catcher',{});
+  c.innerHTML=`
+  <div class="card"><div class="card-title"><i class="fas fa-radar"></i> Detection Indicators</div>
+    ${(data.indicators||[]).map(i=>`
+      <div style="padding:12px;background:var(--surface2);margin:8px 0;border-left:3px solid ${i.severity==='CRITICAL'?'var(--critical)':i.severity==='HIGH'?'var(--danger)':'var(--warning)'};border-radius:4px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><strong style="color:var(--gold-light);font-size:.92em">${esc(i.indicator)}</strong>${sevBadge(i.severity)}</div>
+        <div style="margin-top:6px;color:var(--muted);font-size:.84em">${esc(i.explanation)}</div></div>`).join('')}</div>
+  <div class="grid-2">
+    <div class="card"><div class="card-title"><i class="fas fa-tools"></i> Detection Tools</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.tools||[]).map(t=>`<li style="padding:4px 0;color:var(--teal)">▸ ${esc(t)}</li>`).join('')}</ul></div>
+    <div class="card"><div class="card-title"><i class="fas fa-lightbulb"></i> Recommendations</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.recommendations||[]).map(r=>`<li style="padding:4px 0">▸ ${esc(r)}</li>`).join('')}</ul></div></div>`;
+}
+
+async function tcOssBss(){
+  const c=document.getElementById('tc-ossbss-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/telecom/oss-bss',{});
+  let html='';
+  Object.entries(data.domains||{}).forEach(([domain,info])=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-server"></i> ${esc(domain)}</div>
+      <div style="font-size:.82em;color:var(--muted);margin-top:6px"><strong>Examples:</strong> ${esc(info.examples||'')}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px">
+        <div><div style="font-weight:700;color:var(--danger);font-size:.78em;text-transform:uppercase;letter-spacing:1px">Common Risks</div>
+          <ul style="list-style:none;margin-top:6px;font-size:.83em">${(info.risks||[]).map(r=>`<li style="padding:3px 0;color:var(--text)">⚠ ${esc(r)}</li>`).join('')}</ul></div>
+        <div><div style="font-weight:700;color:var(--success);font-size:.78em;text-transform:uppercase;letter-spacing:1px">Recommended Controls</div>
+          <ul style="list-style:none;margin-top:6px;font-size:.83em">${(info.controls||[]).map(c2=>`<li style="padding:3px 0;color:var(--teal)">✓ ${esc(c2)}</li>`).join('')}</ul></div></div></div>`;
+  });
+  html += `<div class="grid-2">
+    <div class="card"><div class="card-title"><i class="fas fa-search"></i> Common Findings (Field Experience)</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.common_findings||[]).map(f=>`<li style="padding:4px 0;color:var(--warning)">▸ ${esc(f)}</li>`).join('')}</ul></div>
+    <div class="card"><div class="card-title"><i class="fas fa-book"></i> Compliance Frameworks</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.frameworks||[]).map(f=>`<li style="padding:4px 0;color:var(--teal)">▸ ${esc(f)}</li>`).join('')}</ul></div></div>
+    <div class="card"><div class="card-title"><i class="fas fa-lightbulb"></i> Top Recommendations</div>
+      <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.recommendations||[]).map(r=>`<li style="padding:4px 0">▸ ${esc(r)}</li>`).join('')}</ul></div>`;
+  c.innerHTML = html;
+}
+
+async function tcBgp(){
+  const asn=document.getElementById('tc-bgp-asn').value.trim();
+  if(!asn)return alert('Enter ASN.');
+  const c=document.getElementById('tc-bgp-out');c.innerHTML='<div class="card"><span class="spinner"></span> Querying BGP data…</div>';
+  const data=await apiPost('/api/telecom/bgp',{asn});
+  const info=data.info||{};
+  c.innerHTML=`
+  <div class="grid-2">
+    <div class="card"><div class="card-title"><i class="fas fa-info-circle"></i> AS ${esc(asn)}</div>
+      <div style="font-size:.85em;margin-top:8px">
+        <div><strong>Name:</strong> ${esc(info.name||'?')}</div>
+        <div><strong>Description:</strong> ${esc(info.description||'?')}</div>
+        <div><strong>Country:</strong> ${esc(info.country||'?')}</div>
+        <div><strong>RIR:</strong> ${esc(info.rir||'?')}</div>
+        ${info.looking_glass?`<div><strong>Looking Glass:</strong> <a href="${esc(info.looking_glass)}" target="_blank">${esc(info.looking_glass)}</a></div>`:''}
+      </div></div>
+    <div class="card"><div class="card-title"><i class="fas fa-network-wired"></i> Prefixes Announced</div>
+      <div style="font-size:.88em;margin-top:8px"><strong>IPv4:</strong> ${data.prefixes_v4_count||0} prefixes</div>
+      <div style="font-size:.88em"><strong>IPv6:</strong> ${data.prefixes_v6_count||0} prefixes</div>
+      ${(data.sample_prefixes||[]).length?`<div class="mono" style="font-size:.78em;margin-top:8px;color:var(--teal);max-height:120px;overflow-y:auto">${data.sample_prefixes.slice(0,15).map(p=>`<div>${esc(p)}</div>`).join('')}</div>`:''}</div>
+  </div>
+  ${(data.findings||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-exclamation-triangle"></i> Findings</div>
+    ${data.findings.map(f=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid var(--danger);border-radius:4px;font-size:.85em"><strong>${esc(f.type)}</strong> ${sevBadge(f.severity)}${f.prefixes?`<div class="mono" style="margin-top:6px;font-size:.8em">${esc((f.prefixes||[]).join(', '))}</div>`:''}<div style="margin-top:6px;color:var(--accent)">→ ${esc(f.mitigation||'')}</div></div>`).join('')}</div>`:''}
+  <div class="card"><div class="card-title"><i class="fas fa-lightbulb"></i> BGP Security Recommendations</div>
+    <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.recommendations||[]).map(r=>`<li style="padding:4px 0">▸ ${esc(r)}</li>`).join('')}</ul></div>`;
+}
+
+async function tcSim(){
+  const c=document.getElementById('tc-sim-out');c.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data=await apiPost('/api/telecom/sim',{});
+  c.innerHTML=`
+  <div class="card"><div class="card-title"><i class="fas fa-bug"></i> SIM / eSIM Threats</div>
+    ${(data.threats||[]).map(t=>`
+      <div style="padding:12px;background:var(--surface2);margin:8px 0;border-left:3px solid ${t.severity==='CRITICAL'?'var(--critical)':'var(--danger)'};border-radius:4px">
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px"><strong style="color:var(--gold-light)">${esc(t.threat)}</strong>${sevBadge(t.severity)}</div>
+        <div style="margin-top:6px;font-size:.85em">${esc(t.description)}</div>
+        <div style="margin-top:6px;font-size:.84em;color:var(--accent)">→ ${esc(t.mitigation)}</div></div>`).join('')}</div>
+  <div class="card"><div class="card-title"><i class="fas fa-shield-alt"></i> Best Practices</div>
+    <ul style="list-style:none;margin-top:8px;font-size:.86em">${(data.best_practices||[]).map(b=>`<li style="padding:4px 0;color:var(--teal)">✓ ${esc(b)}</li>`).join('')}</ul></div>`;
+}
+</script>
+{% endblock %}

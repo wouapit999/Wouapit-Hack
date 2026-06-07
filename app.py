@@ -388,6 +388,10 @@ def log_analyzer_page():
 def threat_intel_page():
     return render_template("threat_intel.html")
 
+@app.route("/telecom-security")
+def telecom_security_page():
+    return render_template("telecom_security.html")
+
 # ─── Vulnerability Management APIs ──────────────────────────────────────────
 
 @app.route("/api/vuln/import-nmap", methods=["POST"])
@@ -656,6 +660,54 @@ def api_intel_ioc():
 def api_intel_feeds():
     from modules.threat_intel import threat_feed_check
     return jsonify(threat_feed_check(request.json.get("indicator","")))
+
+# ─── Telecom Security APIs ───────────────────────────────────────────────────
+
+@app.route("/api/telecom/ss7", methods=["POST"])
+def api_telecom_ss7():
+    from modules.telecom_security import ss7_assess
+    return jsonify(ss7_assess(request.json.get("network_type","operator")))
+
+@app.route("/api/telecom/diameter", methods=["POST"])
+def api_telecom_diameter():
+    from modules.telecom_security import diameter_assess
+    return jsonify(diameter_assess())
+
+@app.route("/api/telecom/sip-scan", methods=["POST"])
+def api_telecom_sip():
+    from modules.telecom_security import sip_scan
+    data = request.json
+    return jsonify(sip_scan(data.get("host",""), int(data.get("port",5060))))
+
+@app.route("/api/telecom/voip-controls", methods=["POST"])
+def api_telecom_voip():
+    from modules.telecom_security import voip_recommendations
+    return jsonify(voip_recommendations())
+
+@app.route("/api/telecom/imsi-catcher", methods=["POST"])
+def api_telecom_imsi():
+    from modules.telecom_security import imsi_catcher_indicators
+    return jsonify(imsi_catcher_indicators())
+
+@app.route("/api/telecom/oss-bss", methods=["POST"])
+def api_telecom_ossbss():
+    from modules.telecom_security import oss_bss_assess
+    return jsonify(oss_bss_assess())
+
+@app.route("/api/telecom/bgp", methods=["POST"])
+def api_telecom_bgp():
+    from modules.telecom_security import bgp_route_check
+    return jsonify(bgp_route_check(request.json.get("asn","")))
+
+@app.route("/api/telecom/5g-ims", methods=["POST"])
+def api_telecom_5g():
+    from modules.telecom_security import fivegig_security_checklist
+    return jsonify(fivegig_security_checklist())
+
+@app.route("/api/telecom/sim", methods=["POST"])
+def api_telecom_sim():
+    from modules.telecom_security import sim_security_overview
+    return jsonify(sim_security_overview())
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
