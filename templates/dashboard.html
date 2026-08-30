@@ -9,6 +9,197 @@
 </div>
 
 <!-- ═══════════════════════════════════════════════════════════════════
+     APP STORE PENTEST — Inline widget for quick testing
+     ═══════════════════════════════════════════════════════════════════ -->
+<div class="card" style="border:1px solid rgba(212,160,23,.35);background:linear-gradient(135deg,rgba(212,160,23,.06),transparent);margin-bottom:24px">
+  <div class="card-header">
+    <div class="card-title">
+      <i class="fab fa-google-play" style="color:var(--gold-light)"></i>
+      App Store Pentest — Live Widget
+      <span style="font-size:.65em;font-weight:400;color:var(--muted);margin-left:8px;letter-spacing:1px">
+        CHECK ANY APP FOR DATA-ENCRYPTION POSTURE
+      </span>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px" id="ds-app-inputs">
+    <div class="form-group" style="margin:0">
+      <label class="form-label"><i class="fab fa-google-play"></i> Google Play package</label>
+      <input type="text" id="ds-play-pkg" class="form-control mono" placeholder="com.whatsapp">
+    </div>
+    <div class="form-group" style="margin:0">
+      <label class="form-label"><i class="fab fa-apple"></i> Apple App Store ID (numeric)</label>
+      <input type="text" id="ds-apple-id" class="form-control mono" placeholder="310633997">
+    </div>
+  </div>
+
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;align-items:center">
+    <button class="btn btn-primary" onclick="dsAnalyzePlay()">
+      <i class="fab fa-google-play"></i> Analyze Play
+    </button>
+    <button class="btn btn-secondary" onclick="dsAnalyzeApple()">
+      <i class="fab fa-apple"></i> Analyze App Store
+    </button>
+    <button class="btn btn-warning" onclick="dsFullVerdict()" style="padding:10px 20px">
+      <i class="fas fa-scale-balanced"></i> Combined Encryption Verdict
+    </button>
+    <a href="/appstore-pentest" class="btn btn-secondary" style="margin-left:auto;font-size:.85em">
+      Full module <i class="fas fa-external-link-alt"></i>
+    </a>
+  </div>
+
+  <div style="margin-top:6px;font-size:.78em;color:var(--muted)">
+    Quick examples:
+    <span style="cursor:pointer;color:var(--accent)" onclick="dsQuick('com.whatsapp','310633997')">WhatsApp</span> ·
+    <span style="cursor:pointer;color:var(--accent)" onclick="dsQuick('com.instagram.android','389801252')">Instagram</span> ·
+    <span style="cursor:pointer;color:var(--accent)" onclick="dsQuick('com.spotify.music','324684580')">Spotify</span> ·
+    <span style="cursor:pointer;color:var(--accent)" onclick="dsQuick('com.tinder','547702041')">Tinder</span> ·
+    <span style="cursor:pointer;color:var(--accent)" onclick="dsQuick('com.facebook.katana','284882215')">Facebook</span>
+  </div>
+
+  <div id="ds-app-out" style="margin-top:16px"></div>
+</div>
+
+<script>
+function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _sb(s){return `<span class="badge badge-${(s||'info').toLowerCase()}">${_esc(s||'')}</span>`;}
+
+function dsQuick(pkg, appleId){
+  document.getElementById('ds-play-pkg').value = pkg;
+  document.getElementById('ds-apple-id').value = appleId;
+}
+
+async function dsAnalyzePlay(){
+  const pkg = document.getElementById('ds-play-pkg').value.trim();
+  if(!pkg) return alert('Enter a Play package (e.g. com.whatsapp)');
+  const out = document.getElementById('ds-app-out');
+  out.innerHTML = '<div style="padding:16px;text-align:center"><span class="spinner"></span> Fetching Google Play + Data Safety…</div>';
+  const data = await apiPost('/api/appstore/play-lookup',{package:pkg});
+  dsRenderPlay(out, data);
+}
+
+async function dsAnalyzeApple(){
+  const id = document.getElementById('ds-apple-id').value.trim();
+  if(!id) return alert('Enter an App Store ID (numeric, e.g. 310633997)');
+  const out = document.getElementById('ds-app-out');
+  out.innerHTML = '<div style="padding:16px;text-align:center"><span class="spinner"></span> Fetching Apple App Store…</div>';
+  const data = await apiPost('/api/appstore/apple-lookup',{app_id:id});
+  dsRenderApple(out, data);
+}
+
+async function dsFullVerdict(){
+  const pkg = document.getElementById('ds-play-pkg').value.trim();
+  const id  = document.getElementById('ds-apple-id').value.trim();
+  if(!pkg && !id) return alert('Enter at least one: Play package or Apple ID');
+  const out = document.getElementById('ds-app-out');
+  const results = {};
+  if(pkg){
+    out.innerHTML = '<div style="padding:16px;text-align:center"><span class="spinner"></span> Play lookup…</div>';
+    results.play_result = await apiPost('/api/appstore/play-lookup',{package:pkg});
+  }
+  if(id){
+    out.innerHTML = '<div style="padding:16px;text-align:center"><span class="spinner"></span> Apple lookup…</div>';
+    results.apple_result = await apiPost('/api/appstore/apple-lookup',{app_id:id});
+  }
+  out.innerHTML = '<div style="padding:16px;text-align:center"><span class="spinner"></span> Composing verdict…</div>';
+  const verdict = await apiPost('/api/appstore/verdict', results);
+  dsRenderVerdict(out, verdict, results);
+}
+
+function dsRenderPlay(container, data){
+  if(data.error){ container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${_esc(data.error)}</div>`; return; }
+  const a = data.app || {};
+  const ds = data.data_safety || {};
+  const encColor = ds.encryption_in_transit ? 'var(--success)' : 'var(--danger)';
+  const encText  = ds.encryption_in_transit ? '✓ Encrypted in Transit' : '✗ Encryption NOT Declared';
+  container.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:flex-start;padding:14px;background:var(--surface2);border-radius:8px;border-left:4px solid ${encColor}">
+      ${a.icon?`<img src="${_esc(a.icon)}" style="width:60px;height:60px;border-radius:12px">`:''}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:1.05em;font-weight:700;color:var(--gold-light)">${_esc(a.name||a.package)}</div>
+        <div class="mono" style="font-size:.78em;color:var(--muted)">${_esc(a.package)}</div>
+        <div style="font-size:.82em;margin-top:6px;color:var(--muted)">
+          <strong style="color:var(--text)">${_esc(a.developer||'?')}</strong> ·
+          v${_esc(a.version||'?')} ·
+          ${_esc(a.installs||'?')} installs ·
+          ★ ${a.rating_avg||'?'}
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-weight:800;color:${encColor};font-size:.9em">${encText}</div>
+        <a href="${_esc(a.store_url)}" target="_blank" style="font-size:.75em;color:var(--accent)">Store →</a>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:12px">
+      <div style="padding:12px;background:var(--bg);border-radius:6px;font-size:.85em">
+        <div style="font-weight:700;color:var(--muted);font-size:.72em;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">📥 Data Collected</div>
+        ${(ds.data_collected||[]).length?ds.data_collected.map(d=>`<div style="padding:3px 0">▸ ${_esc(d)}</div>`).join(''):'<div style="color:var(--muted)">(none declared)</div>'}
+      </div>
+      <div style="padding:12px;background:var(--bg);border-radius:6px;font-size:.85em">
+        <div style="font-weight:700;color:var(--warning);font-size:.72em;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">📤 Shared with 3rd Parties</div>
+        ${(ds.data_shared||[]).length?ds.data_shared.map(d=>`<div style="padding:3px 0;color:var(--warning)">▸ ${_esc(d)}</div>`).join(''):'<div style="color:var(--muted)">(none declared)</div>'}
+      </div>
+    </div>
+    ${(ds.security_practices||[]).length?`<div style="margin-top:10px;font-size:.83em"><strong>Security practices:</strong> ${ds.security_practices.map(p=>`<span class="badge badge-info">${_esc(p)}</span>`).join(' ')}</div>`:''}
+  `;
+}
+
+function dsRenderApple(container, data){
+  if(data.error){ container.innerHTML = `<div class="alert alert-danger"><i class="fas fa-times"></i> ${_esc(data.error)}</div>`; return; }
+  const a = data.app || {};
+  const pl = data.privacy_labels || {};
+  container.innerHTML = `
+    <div style="display:flex;gap:14px;align-items:flex-start;padding:14px;background:var(--surface2);border-radius:8px;border-left:4px solid var(--accent)">
+      ${a.artwork?`<img src="${_esc(a.artwork)}" style="width:60px;height:60px;border-radius:12px">`:''}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:1.05em;font-weight:700;color:var(--gold-light)">${_esc(a.name||'?')}</div>
+        <div class="mono" style="font-size:.78em;color:var(--muted)">${_esc(a.bundle_id||'?')}</div>
+        <div style="font-size:.82em;margin-top:6px;color:var(--muted)">
+          <strong style="color:var(--text)">${_esc(a.developer||'?')}</strong> ·
+          v${_esc(a.version||'?')} · ${_esc(a.category||'?')} · Min iOS ${_esc(a.min_os||'?')}
+        </div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:.82em">★ ${a.rating_avg||'?'} <span style="color:var(--muted)">(${(a.rating_count||0).toLocaleString()})</span></div>
+        <a href="${_esc(a.store_url)}" target="_blank" style="font-size:.75em;color:var(--accent)">Store →</a>
+      </div>
+    </div>
+    <div style="margin-top:12px;padding:12px;background:var(--bg);border-radius:6px;font-size:.85em">
+      <div style="font-weight:700;color:var(--muted);font-size:.72em;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">🍎 Privacy Nutrition Label</div>
+      ${pl.available?`
+        <div><strong>Categories:</strong> ${(pl.categories||[]).map(c=>`<span class="badge badge-info">${_esc(c)}</span>`).join(' ')||'(none)'}</div>
+        <div style="margin-top:6px"><strong>Data types:</strong> ${(pl.data_categories_declared||[]).map(d=>`<span class="badge badge-medium">${_esc(d)}</span>`).join(' ')||'(none)'}</div>
+        ${pl.no_data_declared?'<div style="margin-top:8px;color:var(--success)">✓ Developer declares "No Data Collected"</div>':''}
+      `:'<div style="color:var(--muted)">Privacy Label not scrapable from store page.</div>'}
+    </div>
+  `;
+}
+
+function dsRenderVerdict(container, verdict, results){
+  const vc = verdict.verdict==='UNENCRYPTED / HIGH RISK'?'var(--critical)':
+             verdict.verdict==='WEAK ENCRYPTION POSTURE'?'var(--danger)':
+             verdict.verdict==='PARTIAL / UNCLEAR'?'var(--warning)':'var(--success)';
+  container.innerHTML = `
+    <div style="padding:18px;border:2px solid ${vc};border-radius:10px;background:${vc}10;text-align:center">
+      <div style="font-size:.7em;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:700">Encryption Posture Verdict</div>
+      <div style="font-size:1.5em;font-weight:800;color:${vc};margin:6px 0">${_esc(verdict.verdict)}</div>
+      <div style="font-size:.85em;color:var(--muted)">Score: ${verdict.score}/100</div>
+    </div>
+    <div style="margin-top:12px;padding:12px;background:var(--surface2);border-radius:6px;font-size:.85em">
+      <div style="font-weight:700;color:var(--muted);font-size:.72em;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Signals Observed</div>
+      ${(verdict.signals||[]).map(s=>`<div style="padding:3px 0">▸ ${_esc(s)}</div>`).join('')||'<div style="color:var(--muted)">(no signals)</div>'}
+    </div>
+    ${(verdict.findings||[]).length?`<div style="margin-top:12px">
+      ${verdict.findings.map(f=>`<div style="padding:10px 12px;background:var(--surface2);border-left:3px solid var(--danger);border-radius:4px;font-size:.85em;margin-top:8px">
+        <strong>${_esc(f.type)}</strong> ${_sb(f.severity)} ${f.source?`<span style="color:var(--muted);font-size:.85em">— ${_esc(f.source)}</span>`:''}
+        ${f.remediation?`<div style="margin-top:4px;color:var(--accent)">→ ${_esc(f.remediation)}</div>`:''}
+      </div>`).join('')}
+    </div>`:''}
+  `;
+}
+</script>
+
+<!-- ═══════════════════════════════════════════════════════════════════
      SPECIALIZED EXPERTISE — Core Capabilities
      ═══════════════════════════════════════════════════════════════════ -->
 <div class="expertise-section">
