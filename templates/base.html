@@ -88,6 +88,9 @@
     <li class="nav-item {% if request.endpoint == 'wireless_page' %}active{% endif %}">
       <a href="{{ url_for('wireless_page') }}"><i class="fas fa-wifi"></i><span>WiFi Security</span></a>
     </li>
+    <li class="nav-item {% if request.endpoint == 'appstore_pentest_page' %}active{% endif %}">
+      <a href="{{ url_for('appstore_pentest_page') }}"><i class="fab fa-google-play"></i><span>App Store Pentest</span></a>
+    </li>
 
     <!-- ═══════════ TELECOM SECURITY DOMAIN ═══════════ -->
     <li class="nav-domain telecom">

@@ -392,6 +392,10 @@ def threat_intel_page():
 def telecom_security_page():
     return render_template("telecom_security.html")
 
+@app.route("/appstore-pentest")
+def appstore_pentest_page():
+    return render_template("appstore_pentest.html")
+
 # ─── Vulnerability Management APIs ──────────────────────────────────────────
 
 @app.route("/api/vuln/import-nmap", methods=["POST"])
@@ -708,6 +712,39 @@ def api_telecom_5g():
 def api_telecom_sim():
     from modules.telecom_security import sim_security_overview
     return jsonify(sim_security_overview())
+
+# ─── App Store Pentest APIs ──────────────────────────────────────────────────
+
+@app.route("/api/appstore/apple-search", methods=["POST"])
+def api_appstore_apple_search():
+    from modules.appstore_pentest import apple_store_search
+    d = request.json
+    return jsonify(apple_store_search(d.get("query",""), d.get("country","us"), int(d.get("limit",10))))
+
+@app.route("/api/appstore/apple-lookup", methods=["POST"])
+def api_appstore_apple_lookup():
+    from modules.appstore_pentest import apple_store_lookup
+    d = request.json
+    return jsonify(apple_store_lookup(d.get("app_id",""), d.get("country","us")))
+
+@app.route("/api/appstore/play-search", methods=["POST"])
+def api_appstore_play_search():
+    from modules.appstore_pentest import play_search
+    d = request.json
+    return jsonify(play_search(d.get("query",""), d.get("country","us"), d.get("lang","en")))
+
+@app.route("/api/appstore/play-lookup", methods=["POST"])
+def api_appstore_play_lookup():
+    from modules.appstore_pentest import play_store_lookup
+    d = request.json
+    return jsonify(play_store_lookup(d.get("package",""), d.get("country","us"), d.get("lang","en")))
+
+@app.route("/api/appstore/verdict", methods=["POST"])
+def api_appstore_verdict():
+    from modules.appstore_pentest import combine_encryption_verdict
+    d = request.json
+    return jsonify(combine_encryption_verdict(
+        d.get("play_result"), d.get("apple_result"), d.get("apk_analysis")))
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)
