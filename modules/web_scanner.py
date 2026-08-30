@@ -562,6 +562,8 @@ def open_redirect_test(url: str) -> dict:
 
 
 def clickjacking_test(url: str) -> dict:
+    """Clickjacking test with bot-challenge / WAF detection to avoid false positives
+    when the scanner cannot reach the real app."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerable": False,
@@ -571,6 +573,20 @@ def clickjacking_test(url: str) -> dict:
     try:
         import requests as req
         r = req.get(url, timeout=8, verify=False)
+
+        # Bot-challenge detection — cannot assess through a WAF interstitial
+        challenge_signals = [
+            r.headers.get("X-Vercel-Mitigated", "").lower() == "challenge",
+            "X-Vercel-Challenge-Token" in r.headers,
+            "cf-mitigated" in {k.lower() for k in r.headers},
+            r.headers.get("Server", "").lower() == "cloudflare" and r.status_code == 403,
+            r.status_code == 403 and "checking your browser" in r.text.lower()[:2000],
+        ]
+        if any(challenge_signals):
+            result["bot_challenged"] = True
+            result["info"] = {"note": "Target returned WAF/bot challenge; cannot assess clickjacking."}
+            return result
+
         xfo           = r.headers.get("X-Frame-Options", "MISSING")
         csp           = r.headers.get("Content-Security-Policy", "")
         has_csp_frame = "frame-ancestors" in csp.lower()
@@ -584,6 +600,8 @@ def clickjacking_test(url: str) -> dict:
                 "type": "Clickjacking",
                 "severity": "MEDIUM",
                 "evidence": "X-Frame-Options: MISSING, CSP frame-ancestors: MISSING",
+                "confidence": "HIGH",
+                "verified": True,
                 "remediation": "Add X-Frame-Options: DENY or CSP: frame-ancestors 'none'.",
             })
     except Exception as e:

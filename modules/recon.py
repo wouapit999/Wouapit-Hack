@@ -183,15 +183,44 @@ def get_headers(url: str) -> dict:
         r = requests.get(url, timeout=10, verify=False, allow_redirects=True)
         result["status_code"] = r.status_code
         result["headers"] = dict(r.headers)
+
+        # Bot-challenge / WAF detection — the target's real headers cannot be
+        # observed through an interstitial. Report accurately instead of
+        # falsely flagging every header as missing.
+        challenge_signals = [
+            r.headers.get("X-Vercel-Mitigated", "").lower() == "challenge",
+            "X-Vercel-Challenge-Token" in r.headers,
+            "cf-mitigated" in {k.lower() for k in r.headers},
+            r.headers.get("Server", "").lower() == "cloudflare" and r.status_code == 403,
+            r.status_code == 403 and "checking your browser" in r.text.lower()[:2000],
+        ]
+        if any(challenge_signals):
+            result["bot_challenged"] = True
+            result["security_headers"] = {}
+            result["info"] = (
+                "Target returned a bot-challenge / WAF interstitial (Vercel Challenge, "
+                "Cloudflare, or similar). Real security headers cannot be assessed "
+                "through the challenge page — this is NOT a finding against the target. "
+                "Re-run from a whitelisted IP or with an authenticated session, or "
+                "inspect headers manually with curl."
+            )
+            result["cookies"] = []
+            return result
+
         security_headers = [
             "Strict-Transport-Security", "X-Content-Type-Options",
             "X-Frame-Options", "Content-Security-Policy",
-            "X-XSS-Protection", "Referrer-Policy",
-            "Permissions-Policy", "Cross-Origin-Opener-Policy",
+            "Referrer-Policy", "Permissions-Policy",
+            "Cross-Origin-Opener-Policy",
+            # X-XSS-Protection is DEPRECATED (MDN, OWASP recommend against setting it)
+            # so it is tracked separately as informational, not as a missing control.
         ]
         result["security_headers"] = {}
         for h in security_headers:
             result["security_headers"][h] = r.headers.get(h, "MISSING")
+        result["deprecated_headers"] = {
+            "X-XSS-Protection": r.headers.get("X-XSS-Protection", "NOT SET (correct — deprecated)"),
+        }
         result["cookies"] = [
             {"name": c.name, "secure": c.secure, "httponly": c.has_nonstandard_attr("HttpOnly"),
              "samesite": c._rest.get("SameSite", "Not set")}

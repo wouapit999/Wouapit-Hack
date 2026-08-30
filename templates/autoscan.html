@@ -534,15 +534,27 @@ async function buildReport(target) {
     }));
   }
 
-  // Missing security headers
-  const missingHdrs = Object.entries(r.headers?.security_headers||{}).filter(([,v])=>v==='MISSING').map(([k])=>k);
-  if (missingHdrs.length > 0) findings.push({
-    title:`Missing Security Headers (${missingHdrs.length})`, severity: missingHdrs.length>=4?'MEDIUM':'LOW',
-    description:`These security headers are absent: ${missingHdrs.join(', ')}.`,
-    location:target, cvss: missingHdrs.length>=4?'5.3':'3.1',
-    evidence:`Missing: ${missingHdrs.join(', ')}`,
-    remediation:'Add all missing headers in your web server or application configuration.',
-  });
+  // Missing security headers — skip if target returned a bot challenge (real
+  // headers can't be assessed through a WAF interstitial)
+  if (r.headers?.bot_challenged) {
+    findings.push({
+      title:'Header assessment blocked by WAF/bot challenge',
+      severity:'INFO',
+      description:'Target returned a Vercel/Cloudflare challenge page. The scanner could not observe real headers. Re-run from a whitelisted IP or verify manually with curl.',
+      location:target, cvss:'N/A',
+      evidence: r.headers.info || 'WAF interstitial detected',
+      remediation:'This is a scanner limitation, not a target vulnerability. Whitelist the scanner IP or check headers manually.',
+    });
+  } else {
+    const missingHdrs = Object.entries(r.headers?.security_headers||{}).filter(([,v])=>v==='MISSING').map(([k])=>k);
+    if (missingHdrs.length > 0) findings.push({
+      title:`Missing Security Headers (${missingHdrs.length})`, severity: missingHdrs.length>=4?'MEDIUM':'LOW',
+      description:`These security headers are absent: ${missingHdrs.join(', ')}.`,
+      location:target, cvss: missingHdrs.length>=4?'5.3':'3.1',
+      evidence:`Missing: ${missingHdrs.join(', ')}`,
+      remediation:'Add all missing headers in your web server or application configuration.',
+    });
+  }
 
   // High-risk ports
   const riskyPorts = {23:'Telnet',21:'FTP',3389:'RDP',445:'SMB',1433:'MSSQL',3306:'MySQL',5432:'PostgreSQL',6379:'Redis',27017:'MongoDB',5900:'VNC',8443:'HTTPS-alt'};
