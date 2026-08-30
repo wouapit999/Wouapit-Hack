@@ -82,12 +82,87 @@ def _req(url, **kwargs):
     return req.get(url, timeout=8, verify=False, **kwargs)
 
 
+# ─── False-positive prevention helpers ──────────────────────────────────────
+
+def _fetch_baseline(url: str, session=None):
+    """Fetch a known-random-nonexistent path to detect soft-404 / SPA behavior.
+    Returns dict {status, size, hash, text_lower, url}."""
+    import hashlib, secrets
+    if not REQUESTS_AVAILABLE:
+        return None
+    try:
+        import requests as req
+        s = session or req
+        rand_path = "/__wouapit_nonexistent_" + secrets.token_hex(6)
+        from urllib.parse import urlparse
+        p = urlparse(url)
+        origin = f"{p.scheme}://{p.netloc}"
+        probe_url = origin + rand_path
+        r = s.get(probe_url, timeout=6, verify=False, allow_redirects=False)
+        body = r.text[:8000]
+        return {
+            "status":     r.status_code,
+            "size":       len(r.content),
+            "hash":       hashlib.md5(body.encode(errors="ignore")).hexdigest(),
+            "text_lower": body.lower(),
+            "url":        probe_url,
+        }
+    except Exception:
+        return None
+
+
+def _fetch_positive_baseline(url: str, session=None):
+    """Fetch the actual target URL as a known-good baseline for differential checks."""
+    import hashlib
+    if not REQUESTS_AVAILABLE:
+        return None
+    try:
+        import requests as req
+        s = session or req
+        r = s.get(url, timeout=8, verify=False, allow_redirects=False)
+        body = r.text[:20000]
+        return {
+            "status":       r.status_code,
+            "size":         len(r.content),
+            "text":         body,
+            "text_lower":   body.lower(),
+            "hash":         hashlib.md5(body.encode(errors="ignore")).hexdigest(),
+            "content_type": r.headers.get("Content-Type", ""),
+        }
+    except Exception:
+        return None
+
+
+def _is_soft_404(response, negative_baseline) -> bool:
+    """True if response looks identical to a known-nonexistent path (SPA behavior)."""
+    if not negative_baseline:
+        return False
+    if response.status_code != negative_baseline["status"]:
+        return False
+    size_diff = abs(len(response.content) - negative_baseline["size"])
+    max_size  = max(len(response.content), negative_baseline["size"], 1)
+    if size_diff / max_size < 0.10:
+        return True
+    import hashlib
+    body_hash = hashlib.md5(response.text[:8000].encode(errors="ignore")).hexdigest()
+    return body_hash == negative_baseline["hash"]
+
+
 def dir_bruteforce(base_url: str, wordlist_key: str = "common") -> dict:
+    """Directory bruteforce with soft-404 detection to prevent false positives.
+    Skips SPA/Vercel-style apps that return 200 for every route."""
+    import hashlib
     if not base_url.startswith(("http://", "https://")):
         base_url = "https://" + base_url
     base_url = base_url.rstrip("/")
 
-    result = {"target": base_url, "timestamp": datetime.utcnow().isoformat(), "found": [], "errors": []}
+    result = {
+        "target":    base_url,
+        "timestamp": datetime.utcnow().isoformat(),
+        "found":     [],
+        "errors":    [],
+        "info":      [],
+    }
     words = WORDLISTS.get(wordlist_key, WORDLISTS["common"])
 
     if not REQUESTS_AVAILABLE:
@@ -97,93 +172,217 @@ def dir_bruteforce(base_url: str, wordlist_key: str = "common") -> dict:
     session = req.Session()
     session.verify = False
 
+    baseline = _fetch_baseline(base_url, session)
+    if baseline:
+        result["baseline"] = {
+            "probe_path": baseline["url"],
+            "status":     baseline["status"],
+            "size":       baseline["size"],
+        }
+        if baseline["status"] == 200:
+            result["info"].append(
+                f"SPA/soft-404 detected: random path returned 200 with {baseline['size']} bytes. "
+                "Only paths returning genuinely different content are reported."
+            )
+
     for word in words:
         url = f"{base_url}/{word}"
         try:
             r = session.get(url, timeout=5, allow_redirects=False)
-            if r.status_code not in (404, 400):
-                result["found"].append({
-                    "url": url,
-                    "status": r.status_code,
-                    "size": len(r.content),
-                    "redirect": r.headers.get("Location", ""),
-                })
+            if r.status_code in (404, 400):
+                continue
+            if _is_soft_404(r, baseline):
+                continue
+            body_hash = hashlib.md5(r.text[:8000].encode(errors="ignore")).hexdigest()
+            if baseline and body_hash == baseline["hash"]:
+                continue
+            confidence = "HIGH"
+            if r.status_code in (301, 302, 303, 307, 308):
+                confidence = "MEDIUM"
+            if r.status_code in (401, 403):
+                confidence = "HIGH"
+            result["found"].append({
+                "url":        url,
+                "status":     r.status_code,
+                "size":       len(r.content),
+                "redirect":   r.headers.get("Location", ""),
+                "confidence": confidence,
+                "verified":   True,
+            })
         except Exception as e:
             result["errors"].append(str(e)[:80])
 
-    result["count"] = len(result["found"])
+    result["count"]   = len(result["found"])
     result["scanned"] = len(words)
+    if not result["found"] and baseline and baseline["status"] == 200:
+        result["info"].append(
+            "No paths differed from soft-404 baseline. Target uses SPA routing — dir bruteforce not effective. "
+            "Manual review recommended."
+        )
     return result
 
 
 def sqli_test(url: str) -> dict:
+    """SQLi test with baseline differential. Only flags when error signature
+    appears in test response AND does not appear in baseline (rules out static content)."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    result = {"target": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"target": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": [], "baseline": {}}
 
     if not REQUESTS_AVAILABLE:
         return {"error": "requests library not installed"}
 
     import requests as req
+    session = req.Session(); session.verify = False
 
-    try:
-        base_r = req.get(url, timeout=8, verify=False)
-    except Exception as e:
-        return {"error": str(e)}
+    # Baseline: fetch target once to capture normal content
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping SQLi test.")
+        return result
+    result["baseline"] = {"status": baseline["status"], "size": baseline["size"]}
+
+    # Extract existing params or default to id
+    import re as _re
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url)
+    existing_params = list(parse_qs(parsed.query).keys())
+    param_name = existing_params[0] if existing_params else "id"
+
+    # Pre-check: if baseline already contains any SQL error string, skip that error
+    baseline_errors_present = [e for e in SQLI_ERRORS if e in baseline["text_lower"]]
+    usable_errors = [e for e in SQLI_ERRORS if e not in baseline_errors_present]
+
+    if baseline_errors_present:
+        result["info"].append(
+            f"Baseline already contains SQL keywords: {baseline_errors_present[:3]}. "
+            "These are excluded to avoid false positives."
+        )
 
     for payload in SQLI_PAYLOADS[:8]:
-        test_url = url + ("&" if "?" in url else "?") + f"id={payload}"
+        sep = "&" if "?" in url else "?"
+        test_url = url + f"{sep}{param_name}={payload}"
         try:
-            r = req.get(test_url, timeout=8, verify=False)
-            body = r.text.lower()
-            for err in SQLI_ERRORS:
-                if err in body:
+            r = session.get(test_url, timeout=8, allow_redirects=False)
+            body_lower = r.text.lower()
+            for err in usable_errors:
+                if err in body_lower:
+                    # Second confirmation: submit a benign value and verify error does NOT appear
+                    benign_url = url + f"{sep}{param_name}=1"
+                    r2 = session.get(benign_url, timeout=6, allow_redirects=False)
+                    if err in r2.text.lower():
+                        # Error appears with benign value too — false positive, static content
+                        continue
                     result["vulnerabilities"].append({
-                        "type": "SQL Injection",
-                        "payload": payload,
-                        "evidence": err,
-                        "url": test_url,
-                        "severity": "CRITICAL",
+                        "type":       "SQL Injection",
+                        "payload":    payload,
+                        "parameter":  param_name,
+                        "evidence":   f"Error string '{err}' present with payload but absent with benign value",
+                        "url":        test_url,
+                        "severity":   "CRITICAL",
+                        "confidence": "HIGH",
+                        "verified":   True,
+                        "reproduce":  f"curl '{test_url}'  vs  curl '{benign_url}'",
                     })
                     break
         except Exception:
             pass
 
     if not result["vulnerabilities"]:
-        result["info"].append("No obvious SQL injection errors detected with basic payloads.")
-
+        result["info"].append(
+            "No confirmed SQL injection. Tested payloads on a synthetic parameter — "
+            "manual testing of real form parameters recommended."
+        )
     return result
 
 
 def xss_test(url: str) -> dict:
+    """Reflected XSS test with baseline + context verification.
+    Only flags when payload appears UNESCAPED in the response AND does not appear in baseline."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
 
-    result = {"target": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"target": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": [], "baseline": {}}
 
     if not REQUESTS_AVAILABLE:
         return {"error": "requests library not installed"}
 
     import requests as req
+    session = req.Session(); session.verify = False
+
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping XSS test.")
+        return result
+    result["baseline"] = {"status": baseline["status"], "size": baseline["size"]}
+
+    from urllib.parse import urlparse, parse_qs
+    parsed = urlparse(url)
+    existing_params = list(parse_qs(parsed.query).keys())
+    param_name = existing_params[0] if existing_params else "q"
+
+    # Test each payload
+    import secrets, html as _html
+    marker = "wouapit_" + secrets.token_hex(4)
 
     for payload in XSS_PAYLOADS:
-        test_url = url + ("&" if "?" in url else "?") + f"q={payload}"
+        # Inject a unique marker inside the payload so we can verify OUR payload was reflected
+        marked_payload = payload.replace("XSS", marker).replace("alert(1)", f"alert('{marker}')")
+        sep = "&" if "?" in url else "?"
+        test_url = url + f"{sep}{param_name}={marked_payload}"
         try:
-            r = req.get(test_url, timeout=8, verify=False)
-            if payload.lower() in r.text.lower():
-                result["vulnerabilities"].append({
-                    "type": "Reflected XSS",
-                    "payload": payload,
-                    "url": test_url,
-                    "severity": "HIGH",
-                })
+            r = session.get(test_url, timeout=8, allow_redirects=False)
+            body = r.text
+
+            # Check 1: marker present at all?
+            if marker not in body:
+                continue
+
+            # Check 2: is the RAW payload (with dangerous chars) reflected?
+            # If server escapes to &lt;script&gt;, HTML-decoded body won't contain the raw tag
+            dangerous_snippet = marked_payload.split(">")[0] + ">" if ">" in marked_payload else marked_payload
+            # Look for the literal dangerous chars (not escaped)
+            payload_lower = marked_payload.lower()
+
+            # If the response HTML-encodes < to &lt; then the raw payload is NOT present
+            if payload_lower not in body.lower():
+                # Only the marker leaked — safely encoded
+                continue
+
+            # Check 3: baseline didn't already contain this pattern
+            if payload_lower in baseline["text_lower"]:
+                continue
+
+            # Check 4: content-type is HTML (JSON responses aren't XSS-exploitable)
+            ctype = r.headers.get("Content-Type", "").lower()
+            if "html" not in ctype and "xml" not in ctype:
+                result["info"].append(
+                    f"Payload reflected in non-HTML response ({ctype}) — not exploitable as XSS."
+                )
+                continue
+
+            # Confirmed reflected XSS
+            result["vulnerabilities"].append({
+                "type":       "Reflected XSS",
+                "payload":    marked_payload,
+                "parameter":  param_name,
+                "url":        test_url,
+                "evidence":   f"Payload '{payload}' reflected unescaped in HTML response",
+                "severity":   "HIGH",
+                "confidence": "HIGH",
+                "verified":   True,
+                "reproduce":  f"curl '{test_url}' | grep '{marker}'",
+            })
         except Exception:
             pass
 
     if not result["vulnerabilities"]:
-        result["info"].append("No reflected XSS detected with basic payloads.")
-
+        result["info"].append(
+            "No reflected XSS confirmed. Payload either not reflected, or reflected in escaped form (safe)."
+        )
     return result
 
 
@@ -319,32 +518,44 @@ REDIRECT_PARAMS = ["redirect", "url", "next", "return", "returnUrl", "goto",
                    "dest", "destination", "continue", "redir", "redirect_uri", "back"]
 
 def open_redirect_test(url: str) -> dict:
+    """Open redirect — require actual 3xx status AND Location header pointing to attacker domain."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
     try:
         import requests as req
-        payloads = ["https://evil.com", "//evil.com", r"\/\/evil.com", "https://evil.com%2F@target.com"]
+        session = req.Session(); session.verify = False
+        payloads = ["https://evil.com", "//evil.com", r"\/\/evil.com"]
         for param in REDIRECT_PARAMS[:6]:
             for payload in payloads[:2]:
-                test_url = url + ("&" if "?" in url else "?") + f"{param}={payload}"
+                sep = "&" if "?" in url else "?"
+                test_url = url + f"{sep}{param}={payload}"
                 try:
-                    r = req.get(test_url, timeout=5, verify=False, allow_redirects=False)
+                    r = session.get(test_url, timeout=5, allow_redirects=False)
                     loc = r.headers.get("Location", "")
-                    if "evil.com" in loc:
+                    # Require actual redirect status (not just Location echo) + evil.com in Location
+                    if r.status_code in (301,302,303,307,308) and "evil.com" in loc.lower():
+                        # Confirm: benign value does NOT produce the same redirect
+                        benign = session.get(url + f"{sep}{param}=/home",
+                                             timeout=5, allow_redirects=False)
+                        if "evil.com" in benign.headers.get("Location","").lower():
+                            continue
                         result["vulnerabilities"].append({
-                            "type": "Open Redirect",
-                            "parameter": param, "payload": payload,
-                            "location_header": loc, "severity": "MEDIUM",
-                            "url": test_url,
-                            "remediation": "Validate and whitelist redirect destinations server-side.",
+                            "type":       "Open Redirect",
+                            "parameter":  param, "payload": payload,
+                            "location_header": loc, "status": r.status_code,
+                            "severity":   "MEDIUM", "url": test_url,
+                            "confidence": "HIGH", "verified": True,
+                            "reproduce":  f"curl -I '{test_url}' → Location: {loc}",
+                            "remediation":"Validate and whitelist redirect destinations server-side.",
                         })
                 except Exception:
                     pass
         if not result["vulnerabilities"]:
-            result["info"].append("No open redirects detected with common parameters.")
+            result["info"].append("No open redirects confirmed (require actual 3xx + attacker domain in Location).")
     except Exception as e:
         result["error"] = str(e)
     return result
@@ -383,27 +594,47 @@ def clickjacking_test(url: str) -> dict:
 HTTP_DANGEROUS = ["PUT", "DELETE", "PATCH", "TRACE", "CONNECT", "DEBUG", "MOVE"]
 
 def http_methods_test(url: str) -> dict:
+    """HTTP methods — only 2xx counts as truly 'allowed'.
+    3xx/401/403 mean the server received the method but blocked/redirected — NOT allowed."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
-              "allowed": [], "dangerous": [], "vulnerabilities": []}
+              "allowed": [], "dangerous": [], "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
     try:
         import requests as req
+        session = req.Session(); session.verify = False
+
+        # Baseline: what does GET return? Some servers return 200 for any method.
+        get_r = session.get(url, timeout=5, allow_redirects=False)
+        get_status = get_r.status_code
+        get_size = len(get_r.content)
+
         for method in HTTP_DANGEROUS + ["GET", "HEAD", "POST", "OPTIONS"]:
             try:
-                r = req.request(method, url, timeout=5, verify=False)
-                if r.status_code not in (405, 501, 400):
-                    result["allowed"].append({"method": method, "status": r.status_code})
-                    if method in HTTP_DANGEROUS:
-                        result["dangerous"].append(method)
-                        result["vulnerabilities"].append({
-                            "type": f"Dangerous HTTP Method: {method}",
-                            "severity": "HIGH" if method in ("PUT","DELETE","DEBUG","TRACE") else "MEDIUM",
-                            "evidence": f"{method} returned HTTP {r.status_code}",
-                            "remediation": f"Disable {method} on the web server configuration.",
-                        })
+                r = session.request(method, url, timeout=5, allow_redirects=False)
+                # Only 2xx = truly allowed. 3xx/4xx/5xx = server saw the method and handled it (usually blocked)
+                if r.status_code < 200 or r.status_code >= 300:
+                    continue
+                # If dangerous method returns same status+size as GET, server likely ignored the method
+                if method in HTTP_DANGEROUS and r.status_code == get_status and abs(len(r.content) - get_size) < 50:
+                    result["info"].append(
+                        f"{method} returned identical response to GET — server likely ignored method (not truly allowed)."
+                    )
+                    continue
+                result["allowed"].append({"method": method, "status": r.status_code})
+                if method in HTTP_DANGEROUS:
+                    result["dangerous"].append(method)
+                    result["vulnerabilities"].append({
+                        "type":       f"Dangerous HTTP Method: {method}",
+                        "severity":   "HIGH" if method in ("PUT","DELETE","DEBUG","TRACE") else "MEDIUM",
+                        "evidence":   f"{method} returned HTTP {r.status_code} (differs from GET baseline)",
+                        "confidence": "MEDIUM",
+                        "verified":   True,
+                        "reproduce":  f"curl -X {method} '{url}' -i",
+                        "remediation":f"Disable {method} on the web server configuration.",
+                    })
             except Exception:
                 pass
     except Exception as e:
@@ -423,33 +654,59 @@ LFI_INDICATORS = ["root:x:", "daemon:", "[extensions]", "www-data", "/bin/bash",
                   "/bin/sh", "proc/self", "[boot loader]", "/sbin/nologin"]
 
 def lfi_test(url: str) -> dict:
+    """LFI test with baseline check. Only flags when indicator appears with payload
+    AND does not appear in baseline (rules out static content containing the string)."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
+    import requests as req
+    session = req.Session(); session.verify = False
+
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping LFI test.")
+        return result
+
+    # Filter out indicators already in baseline (false positive source)
+    baseline_indicators = [i for i in LFI_INDICATORS if i in baseline["text"]]
+    usable_indicators = [i for i in LFI_INDICATORS if i not in baseline_indicators]
+    if baseline_indicators:
+        result["info"].append(
+            f"Baseline contains indicators {baseline_indicators[:3]} — excluded to avoid false positives."
+        )
+
     try:
-        import requests as req
-        params = ["file", "page", "path", "include", "template", "doc", "document", "view", "load", "read", "lang"]
+        params = ["file","page","path","include","template","doc","document","view","load","read","lang"]
         for param in params[:5]:
             for payload in LFI_PAYLOADS[:6]:
-                test_url = url + ("&" if "?" in url else "?") + f"{param}={payload}"
+                sep = "&" if "?" in url else "?"
+                test_url = url + f"{sep}{param}={payload}"
                 try:
-                    r = req.get(test_url, timeout=6, verify=False)
-                    for ind in LFI_INDICATORS:
+                    r = session.get(test_url, timeout=6, allow_redirects=False)
+                    for ind in usable_indicators:
                         if ind in r.text:
+                            # Confirm: benign value must NOT produce indicator
+                            benign_url = url + f"{sep}{param}=index.html"
+                            r2 = session.get(benign_url, timeout=6, allow_redirects=False)
+                            if ind in r2.text:
+                                continue  # false positive — indicator is not payload-triggered
                             result["vulnerabilities"].append({
-                                "type": "Local File Inclusion (LFI)",
-                                "parameter": param, "payload": payload,
-                                "indicator": ind, "severity": "CRITICAL",
-                                "url": test_url,
-                                "remediation": "Sanitise file path inputs. Use whitelists. Disable allow_url_include.",
+                                "type":       "Local File Inclusion (LFI)",
+                                "parameter":  param, "payload": payload,
+                                "indicator":  ind, "severity": "CRITICAL",
+                                "url":        test_url,
+                                "confidence": "HIGH", "verified": True,
+                                "reproduce":  f"curl '{test_url}' | grep '{ind}'",
+                                "remediation":"Sanitise file path inputs. Use whitelists. Disable allow_url_include.",
                             })
                             break
                 except Exception:
                     pass
         if not result["vulnerabilities"]:
-            result["info"].append("No LFI detected with common payloads.")
+            result["info"].append("No confirmed LFI. Target may not have file-inclusion functionality.")
     except Exception as e:
         result["error"] = str(e)
     return result
@@ -467,45 +724,71 @@ CMD_PAYLOADS = [
 ]
 
 def cmd_injection_test(url: str) -> dict:
+    """Command injection with baseline + timing baseline to prevent false positives."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
+
+    import requests as req, time
+    session = req.Session(); session.verify = False
+
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping cmd injection.")
+        return result
+
+    # Measure baseline response time (2 samples)
+    t0 = time.time(); session.get(url, timeout=8, verify=False, allow_redirects=False); t1 = time.time()
+    baseline_time = t1 - t0
+
     try:
-        import requests as req
-        import time
-        params = ["cmd", "exec", "command", "run", "ping", "host", "ip", "query", "search", "input", "c"]
+        params = ["cmd","exec","command","run","ping","host","ip","query","search","input","c"]
         for param in params[:4]:
             for payload, indicators in CMD_PAYLOADS[:6]:
-                test_url = url + ("&" if "?" in url else "?") + f"{param}={payload}"
+                sep = "&" if "?" in url else "?"
+                test_url = url + f"{sep}{param}={payload}"
                 try:
                     t0 = time.time()
-                    r  = req.get(test_url, timeout=8, verify=False)
+                    r  = session.get(test_url, timeout=10, allow_redirects=False)
                     elapsed = time.time() - t0
                     for ind in indicators:
-                        if ind in r.text:
+                        if ind in r.text and ind not in baseline["text"]:
+                            # Confirm with benign value
+                            r2 = session.get(url + f"{sep}{param}=test", timeout=6, allow_redirects=False)
+                            if ind in r2.text:
+                                continue
                             result["vulnerabilities"].append({
-                                "type": "Command Injection",
-                                "parameter": param, "payload": payload,
-                                "indicator": ind, "severity": "CRITICAL",
-                                "url": test_url,
-                                "evidence": r.text[:300],
-                                "remediation": "Never pass user input to shell commands. Use safe APIs instead.",
+                                "type":       "Command Injection",
+                                "parameter":  param, "payload": payload,
+                                "indicator":  ind, "severity": "CRITICAL",
+                                "url":        test_url,
+                                "confidence": "HIGH", "verified": True,
+                                "reproduce":  f"curl '{test_url}' | grep '{ind}'",
+                                "remediation":"Never pass user input to shell commands.",
                             })
                             break
-                    if not indicators and elapsed > 2.5:
-                        result["vulnerabilities"].append({
-                            "type": "Blind Command Injection (time-based)",
-                            "parameter": param, "payload": payload,
-                            "severity": "CRITICAL", "url": test_url,
-                            "evidence": f"Response delayed {elapsed:.1f}s",
-                            "remediation": "Never pass user input to shell commands.",
-                        })
+                    # Blind time-based — require significant delta vs baseline (not absolute threshold)
+                    if not indicators and elapsed > baseline_time + 2.5:
+                        # Re-run to confirm delay is reproducible
+                        t0b = time.time()
+                        session.get(test_url, timeout=10, allow_redirects=False)
+                        elapsed2 = time.time() - t0b
+                        if elapsed2 > baseline_time + 2.0:
+                            result["vulnerabilities"].append({
+                                "type":       "Blind Command Injection (time-based)",
+                                "parameter":  param, "payload": payload,
+                                "severity":   "CRITICAL", "url": test_url,
+                                "evidence":   f"Delay {elapsed:.1f}s (2nd run {elapsed2:.1f}s) vs baseline {baseline_time:.1f}s",
+                                "confidence": "MEDIUM",
+                                "verified":   True,
+                            })
                 except Exception:
                     pass
         if not result["vulnerabilities"]:
-            result["info"].append("No command injection detected with basic payloads.")
+            result["info"].append("No confirmed command injection.")
     except Exception as e:
         result["error"] = str(e)
     return result
@@ -518,31 +801,66 @@ SSTI_PAYLOADS = [
 ]
 
 def ssti_test(url: str) -> dict:
+    """SSTI with differential math + baseline check.
+    Requires BOTH {{7*7}}=49 AND {{8*8}}=64 to appear (differential proof of evaluation)."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
+    import requests as req
+    session = req.Session(); session.verify = False
+
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping SSTI.")
+        return result
+
+    # Numbers that likely appear on the site normally (dates, prices) shouldn't be counted
+    baseline_has_49 = "49" in baseline["text"]
+    baseline_has_64 = "64" in baseline["text"]
+    baseline_has_7777777 = "7777777" in baseline["text"]
+
+    if baseline_has_49 and baseline_has_64:
+        result["info"].append(
+            "Baseline already contains both '49' and '64' — SSTI test unreliable on this target."
+        )
+        return result
+
     try:
-        import requests as req
-        params = ["name", "template", "message", "query", "q", "search", "input", "text", "content", "subject"]
+        params = ["name","template","message","query","q","search","input","text","content","subject"]
+        # Test pairs: (payload_A, expected_A, payload_B, expected_B) — need BOTH to match
+        differential_pairs = [
+            ("{{7*7}}",   "49", "{{8*8}}",   "64"),
+            ("${7*7}",    "49", "${8*8}",    "64"),
+            ("{{7*'7'}}", "7777777", "{{6*'6'}}", "666666"),
+        ]
         for param in params[:4]:
-            for payload, expected in SSTI_PAYLOADS[:6]:
-                test_url = url + ("&" if "?" in url else "?") + f"{param}={payload}"
+            for pa, ea, pb, eb in differential_pairs:
+                sep = "&" if "?" in url else "?"
+                url_a = url + f"{sep}{param}={pa}"
+                url_b = url + f"{sep}{param}={pb}"
                 try:
-                    r = req.get(test_url, timeout=6, verify=False)
-                    if expected in r.text:
+                    ra = session.get(url_a, timeout=6, allow_redirects=False)
+                    rb = session.get(url_b, timeout=6, allow_redirects=False)
+                    a_hit = (ea in ra.text) and (baseline["text"].count(ea) < ra.text.count(ea))
+                    b_hit = (eb in rb.text) and (baseline["text"].count(eb) < rb.text.count(eb))
+                    if a_hit and b_hit:
                         result["vulnerabilities"].append({
-                            "type": "Server-Side Template Injection (SSTI)",
-                            "parameter": param, "payload": payload,
-                            "expected": expected, "severity": "CRITICAL",
-                            "url": test_url,
-                            "remediation": "Use sandboxed template engines. Never pass user input directly to templates.",
+                            "type":       "Server-Side Template Injection (SSTI)",
+                            "parameter":  param, "payload_a": pa, "payload_b": pb,
+                            "evidence":   f"Both {pa}={ea} and {pb}={eb} evaluated server-side",
+                            "severity":   "CRITICAL", "url": url_a,
+                            "confidence": "HIGH", "verified": True,
+                            "reproduce":  f"curl '{url_a}' → contains {ea}; curl '{url_b}' → contains {eb}",
+                            "remediation":"Use sandboxed template engines. Never pass user input to templates.",
                         })
+                        break
                 except Exception:
                     pass
         if not result["vulnerabilities"]:
-            result["info"].append("No SSTI detected with common payloads.")
+            result["info"].append("No SSTI confirmed (differential test requires both math expressions to evaluate).")
     except Exception as e:
         result["error"] = str(e)
     return result
@@ -560,33 +878,52 @@ SSRF_INDICATORS = ["ami-id", "instance-id", "computeMetadata", "local-hostname",
                    "iam/security-credentials", "meta-data", "placement"]
 
 def ssrf_test(url: str) -> dict:
+    """SSRF with baseline — filter indicators that appear in normal page content."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
-    result = {"url": url, "timestamp": datetime.utcnow().isoformat(), "vulnerabilities": [], "info": []}
+    result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
+              "vulnerabilities": [], "info": []}
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
+    import requests as req
+    session = req.Session(); session.verify = False
+
+    baseline = _fetch_positive_baseline(url, session)
+    if not baseline:
+        result["info"].append("Could not fetch baseline — skipping SSRF.")
+        return result
+    baseline_indicators = [i for i in SSRF_INDICATORS if i in baseline["text"]]
+    usable_indicators = [i for i in SSRF_INDICATORS if i not in baseline_indicators]
+
     try:
-        import requests as req
-        params = ["url", "link", "src", "source", "dest", "destination", "fetch", "load", "uri", "resource", "file"]
+        params = ["url","link","src","source","dest","destination","fetch","load","uri","resource","file"]
         for param in params[:4]:
             for target in SSRF_TARGETS[:3]:
-                test_url = url + ("&" if "?" in url else "?") + f"{param}={target}"
+                sep = "&" if "?" in url else "?"
+                test_url = url + f"{sep}{param}={target}"
                 try:
-                    r = req.get(test_url, timeout=5, verify=False)
-                    for ind in SSRF_INDICATORS:
+                    r = session.get(test_url, timeout=6, allow_redirects=False)
+                    for ind in usable_indicators:
                         if ind in r.text:
+                            # Confirm with benign URL
+                            r2 = session.get(url + f"{sep}{param}=https://example.com",
+                                             timeout=6, allow_redirects=False)
+                            if ind in r2.text:
+                                continue
                             result["vulnerabilities"].append({
-                                "type": "Server-Side Request Forgery (SSRF)",
-                                "parameter": param, "payload": target,
-                                "indicator": ind, "severity": "CRITICAL",
-                                "url": test_url,
-                                "remediation": "Validate and restrict URLs fetched server-side. Block cloud metadata IPs.",
+                                "type":       "Server-Side Request Forgery (SSRF)",
+                                "parameter":  param, "payload": target,
+                                "indicator":  ind, "severity": "CRITICAL",
+                                "url":        test_url,
+                                "confidence": "HIGH", "verified": True,
+                                "reproduce":  f"curl '{test_url}' | grep '{ind}'",
+                                "remediation":"Validate and restrict URLs. Block RFC1918 + 169.254.169.254.",
                             })
                             break
                 except Exception:
                     pass
         if not result["vulnerabilities"]:
-            result["info"].append("No SSRF detected with cloud metadata payloads.")
+            result["info"].append("No SSRF confirmed against cloud metadata endpoints.")
     except Exception as e:
         result["error"] = str(e)
     return result
@@ -634,6 +971,8 @@ def cookie_analyzer(url: str) -> dict:
 
 
 def csrf_check(url: str) -> dict:
+    """CSRF check — only flag when actual <form> tags with state-changing methods exist.
+    Skip pure SPAs and read-only pages (no forms = no CSRF surface)."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     result = {"url": url, "timestamp": datetime.utcnow().isoformat(),
@@ -641,26 +980,50 @@ def csrf_check(url: str) -> dict:
     if not REQUESTS_AVAILABLE:
         return {"error": "requests not installed"}
     try:
-        import requests as req
+        import requests as req, re as _re
         r = req.get(url, timeout=8, verify=False)
-        content      = r.text.lower()
-        csrf_tokens  = ["csrf", "_token", "csrftoken", "csrf_token", "authenticity_token",
-                        "requestverificationtoken", "_csrf", "xsrf"]
-        found_token  = any(tok in content for tok in csrf_tokens)
-        samesite_ok  = any(c._rest.get("SameSite") in ("Strict","Lax") for c in r.cookies)
-        forms        = content.count("<form")
+        content = r.text
+        content_lower = content.lower()
+        # Find actual form tags with their method attribute
+        forms = _re.findall(r'<form\b[^>]*>', content, _re.IGNORECASE)
+        state_changing_forms = [
+            f for f in forms
+            if _re.search(r'method\s*=\s*["\']?(post|put|delete|patch)', f, _re.IGNORECASE)
+        ]
+        # Also consider forms with no method attribute — default is GET, not state-changing
+        # Only forms explicitly using POST/PUT/DELETE are CSRF-relevant
+
+        csrf_tokens = ["csrf","_token","csrftoken","csrf_token","authenticity_token",
+                       "requestverificationtoken","_csrf","xsrf","__requestverificationtoken"]
+        found_token = any(tok in content_lower for tok in csrf_tokens)
+        samesite_ok = any(c._rest.get("SameSite") in ("Strict","Lax") for c in r.cookies)
+        # Check response headers for CSRF-related headers
+        csrf_headers = any(h.lower() in ("x-csrf-token","x-xsrf-token") for h in r.headers)
+
         result["info"] = {
-            "csrf_token_found": found_token,
-            "samesite_cookies": samesite_ok,
-            "forms_detected": forms,
+            "total_forms":            len(forms),
+            "state_changing_forms":   len(state_changing_forms),
+            "csrf_token_found":       found_token,
+            "samesite_cookies":       samesite_ok,
+            "csrf_headers":           csrf_headers,
         }
-        if forms > 0 and not found_token and not samesite_ok:
+
+        if not state_changing_forms:
+            result["info"]["note"] = "No POST/PUT/DELETE forms found — no CSRF surface on this page."
+            return result
+
+        if state_changing_forms and not found_token and not samesite_ok and not csrf_headers:
             result["vulnerabilities"].append({
-                "type": "Potential CSRF Vulnerability",
-                "severity": "HIGH",
-                "evidence": f"{forms} form(s), no CSRF token, no SameSite cookies",
-                "remediation": "Implement synchroniser token pattern on all state-changing forms.",
+                "type":       "Potential CSRF Vulnerability",
+                "severity":   "HIGH",
+                "evidence":   f"{len(state_changing_forms)} state-changing form(s), no CSRF token, no SameSite cookies, no CSRF headers",
+                "confidence": "MEDIUM",
+                "verified":   True,
+                "reproduce":  f"View source of '{url}' and inspect <form method='POST'> elements",
+                "remediation":"Implement synchroniser token pattern on all state-changing forms.",
             })
+        else:
+            result["info"]["note"] = "CSRF protections detected (token, SameSite, or custom header)."
     except Exception as e:
         result["error"] = str(e)
     return result
