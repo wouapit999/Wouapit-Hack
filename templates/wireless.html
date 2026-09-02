@@ -9,6 +9,12 @@
     <button class="tab-btn" data-tab="ws-hs">Handshake Analysis</button>
     <button class="tab-btn" data-tab="ws-crack">Hash Crack</button>
     <button class="tab-btn" data-tab="ws-rogue">Rogue AP</button>
+    <button class="tab-btn" data-tab="ws-real-crack" style="color:var(--gold-light)">⚡ REAL Cracker</button>
+    <button class="tab-btn" data-tab="ws-wigle">WiGLE Lookup</button>
+    <button class="tab-btn" data-tab="ws-defaults">Router Defaults</button>
+    <button class="tab-btn" data-tab="ws-playbook">Attack Playbook</button>
+    <button class="tab-btn" data-tab="ws-audit">Full Audit + Remediation</button>
+    <button class="tab-btn" data-tab="ws-live" style="color:#ff6b6b">🎯 LIVE Hardware</button>
   </div>
   <div class="tab-panel active" id="ws-scan" style="padding:20px">
     <button class="btn btn-primary" onclick="wsScan()"><i class="fas fa-broadcast-tower"></i> Run WiFi Scan</button>
@@ -36,6 +42,192 @@
       <textarea id="ws-known" class="form-control mono" rows="5" placeholder='[{"ssid":"Corporate-WiFi","bssid":"AA:BB:CC:11:22:33"}]'></textarea></div>
     <button class="btn btn-primary" onclick="wsRogue()"><i class="fas fa-user-shield"></i> Detect Rogue APs</button>
     <div class="output-box" id="ws-rogue-out" style="margin-top:16px"><span class="output-placeholder">Rogue AP findings…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <!-- ═══════════ REAL WPA2 CRACKER ═══════════ -->
+  <div class="tab-panel" id="ws-real-crack" style="padding:20px">
+    <div class="alert alert-danger"><i class="fas fa-radiation"></i>
+      <div><strong>Real WPA2 crypto.</strong> This runs actual PBKDF2-HMAC-SHA1 (4096 iterations) and EAPOL MIC verification. Upload a <code>.hc22000</code> file you captured with <code>hcxdumptool</code> or <code>hcxpcapngtool</code>. Only crack networks you own or are authorised to test.</div></div>
+
+    <div class="form-group"><label class="form-label">1. Handshake in hc22000 format (paste or upload)</label>
+      <textarea id="ws-hc" class="form-control mono" rows="4" placeholder="WPA*02*a1b2c3d4...*aabbccddeeff*112233445566*4d7957696669*ANONCE*EAPOL*01"></textarea>
+      <div style="margin-top:6px;font-size:.8em;color:var(--muted)">
+        Convert your .cap/.pcap capture first:
+        <code style="background:var(--bg);padding:2px 6px;border-radius:3px">hcxpcapngtool -o hashes.hc22000 capture.cap</code>
+      </div>
+    </div>
+
+    <div class="form-group"><label class="form-label">2. Custom wordlist (optional, one password per line)</label>
+      <textarea id="ws-real-wl" class="form-control mono" rows="4" placeholder="password123&#10;admin1234&#10;MyWiFi2024"></textarea>
+      <div style="margin-top:6px;font-size:.8em;color:var(--muted)">Combined with 100-word built-in list and SSID-based mutations. Passwords &lt; 8 or &gt; 63 chars filtered per WPA2 spec.</div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Max words to try</label>
+        <input type="number" id="ws-max-words" class="form-control" value="3000" min="10" max="10000"></div>
+      <div class="form-group"><label class="form-label">Timeout (seconds)</label>
+        <input type="number" id="ws-timeout" class="form-control" value="25" min="5" max="55"></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="wsRealCrack()"><i class="fas fa-unlock-keyhole"></i> Crack Handshake</button>
+    <div id="ws-real-out" style="margin-top:16px"></div>
+
+    <div class="alert alert-warning" style="margin-top:16px;font-size:.85em">
+      <i class="fas fa-info-circle"></i>
+      <div>Serverless CPU ≈ 500 PMKs/sec. A modern GPU runs 1,000,000+ PMKs/sec via hashcat.
+      For serious cracking use: <code>hashcat -a 0 -m 22000 hashes.hc22000 rockyou.txt</code> locally.</div>
+    </div>
+  </div>
+
+  <!-- ═══════════ WiGLE Lookup ═══════════ -->
+  <div class="tab-panel" id="ws-wigle" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-map-marked-alt"></i>
+      <div>WiGLE.net is the world's largest crowd-sourced WiFi mapping database (1 billion+ APs). Check if your SSID/BSSID has been publicly geolocated by wardrivers. <a href="https://wigle.net/account" target="_blank" style="color:var(--accent)">Get a free API key →</a></div></div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">SSID or BSSID to search</label>
+        <input type="text" id="ws-wigle-q" class="form-control mono" placeholder="Home_WiFi  or  AA:BB:CC:DD:EE:FF"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">WiGLE API Name</label>
+        <input type="text" id="ws-wigle-user" class="form-control mono" placeholder="AIDxxxxxxxxxxxxx"></div>
+      <div class="form-group"><label class="form-label">WiGLE API Token</label>
+        <input type="password" id="ws-wigle-token" class="form-control mono" placeholder="Token"></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="wsWigle()"><i class="fas fa-search-location"></i> Search WiGLE</button>
+    <div id="ws-wigle-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ═══════════ Router Defaults ═══════════ -->
+  <div class="tab-panel" id="ws-defaults" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-key"></i>
+      <div>Test whether your router still uses factory default credentials — the #1 way WiFi networks get owned after the WPA password.</div></div>
+
+    <div class="form-group"><label class="form-label">Router vendor or model (leave blank to see all)</label>
+      <input type="text" id="ws-router-q" class="form-control" placeholder="netgear, tp-link, huawei, cisco…"></div>
+
+    <button class="btn btn-primary" onclick="wsDefaults()"><i class="fas fa-door-open"></i> Show Default Credentials</button>
+    <div id="ws-defaults-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ═══════════ Attack Playbook ═══════════ -->
+  <div class="tab-panel" id="ws-playbook" style="padding:20px">
+    <div class="alert alert-warning"><i class="fas fa-hard-hat"></i>
+      <div><strong>Real Kali Linux commands.</strong> These are the actual commands used by wireless pentesters. Requires physical hardware (USB WiFi adapter with monitor mode + injection). Use ONLY on networks you own or are authorised to test — deauth attacks are illegal against others.</div></div>
+
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Target SSID</label>
+        <input type="text" id="ws-pb-ssid" class="form-control" placeholder="MyHome_WiFi"></div>
+      <div class="form-group"><label class="form-label">Target BSSID</label>
+        <input type="text" id="ws-pb-bssid" class="form-control mono" placeholder="AA:BB:CC:DD:EE:FF"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Channel</label>
+        <input type="number" id="ws-pb-ch" class="form-control" value="6" min="1" max="165"></div>
+      <div class="form-group"><label class="form-label">WiFi interface</label>
+        <input type="text" id="ws-pb-iface" class="form-control mono" value="wlan0"></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="wsPlaybook()"><i class="fas fa-book"></i> Generate Attack Playbook</button>
+    <div id="ws-pb-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ═══════════ Full Audit + Remediation ═══════════ -->
+  <div class="tab-panel" id="ws-audit" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Your WiFi SSID</label>
+        <input type="text" id="ws-a-ssid" class="form-control" placeholder="MyHome_WiFi"></div>
+      <div class="form-group"><label class="form-label">BSSID (optional)</label>
+        <input type="text" id="ws-a-bssid" class="form-control mono" placeholder="AA:BB:CC:DD:EE:FF"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Current encryption</label>
+      <select id="ws-a-enc" class="form-control">
+        <option>WPA3-Personal</option>
+        <option>WPA3-Enterprise</option>
+        <option>WPA2-Personal</option>
+        <option>WPA2-Enterprise</option>
+        <option>WPA-TKIP</option>
+        <option>WEP</option>
+        <option>OPEN</option>
+      </select></div>
+
+    <button class="btn btn-primary" onclick="wsAudit()"><i class="fas fa-clipboard-check"></i> Run Full Audit</button>
+    <div id="ws-audit-out" style="margin-top:16px"></div>
+  </div>
+
+  <!-- ═══════════ LIVE Hardware — USB antenna, monitor mode, real scan ═══════════ -->
+  <div class="tab-panel" id="ws-live" style="padding:20px">
+    <div class="alert alert-danger" style="border:2px solid #ff6b6b">
+      <i class="fas fa-radiation"></i>
+      <div><strong>Live hardware attacks — Linux + root required.</strong> This section talks to a real USB WiFi adapter. It only works when Wouapit-Hack is run <strong>locally on Kali/Parrot Linux with sudo</strong> — not on the public Vercel site. Clone the repo, then <code>sudo python app.py</code>. Only test networks you own or have written authorisation for.</div>
+    </div>
+
+    <!-- Step 1: Detect USB adapter -->
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <div class="card-title"><i class="fas fa-usb"></i> Step 1 — Detect USB WiFi adapters</div>
+      <div style="font-size:.85em;color:var(--muted);margin:6px 0 10px">Runs <code>lsusb</code> + <code>iw dev</code>. Flags known monitor-mode-capable chipsets (Alfa AWUS036NHA, Panda PAU09, TP-Link TL-WN722N v1, etc.)</div>
+      <button class="btn btn-primary" onclick="wsHwDetect()"><i class="fas fa-search"></i> Scan USB devices</button>
+      <div id="ws-hw-detect-out" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Step 2: Enable monitor mode -->
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <div class="card-title"><i class="fas fa-eye"></i> Step 2 — Enable monitor mode</div>
+      <div style="font-size:.85em;color:var(--muted);margin:6px 0 10px">Runs <code>airmon-ng check kill</code> + <code>airmon-ng start &lt;iface&gt;</code>. Creates a <code>&lt;iface&gt;mon</code> interface for passive capture and injection.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Interface</label>
+          <input type="text" id="ws-hw-iface" class="form-control mono" value="wlan0"></div>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-secondary" onclick="wsHwCheck()"><i class="fas fa-question-circle"></i> Check capability</button>
+        <button class="btn btn-primary"   onclick="wsHwEnable()"><i class="fas fa-play"></i> Enable monitor</button>
+        <button class="btn btn-warning"   onclick="wsHwDisable()"><i class="fas fa-stop"></i> Disable + restore NetworkManager</button>
+      </div>
+      <div id="ws-hw-mon-out" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Step 3: Live scan -->
+    <div class="card" style="border-left:3px solid var(--accent)">
+      <div class="card-title"><i class="fas fa-broadcast-tower"></i> Step 3 — Live discovery scan</div>
+      <div style="font-size:.85em;color:var(--muted);margin:6px 0 10px">Runs <code>airodump-ng</code> for N seconds and parses the CSV. Shows all APs and clients in range.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Monitor interface</label>
+          <input type="text" id="ws-hw-mon-iface" class="form-control mono" value="wlan0mon"></div>
+        <div class="form-group"><label class="form-label">Scan duration (sec)</label>
+          <input type="number" id="ws-hw-duration" class="form-control" value="15" min="5" max="60"></div>
+      </div>
+      <button class="btn btn-primary" onclick="wsHwScan()"><i class="fas fa-search"></i> Start live scan</button>
+      <div id="ws-hw-scan-out" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Step 4: Capture handshake -->
+    <div class="card" style="border-left:3px solid var(--danger)">
+      <div class="card-title"><i class="fas fa-handshake"></i> Step 4 — Capture WPA handshake</div>
+      <div class="alert alert-warning" style="font-size:.82em"><i class="fas fa-exclamation-triangle"></i> Deauth injection is illegal against networks you don't own. Leave "Deauth client MAC" empty for passive capture only.</div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Target BSSID</label>
+          <input type="text" id="ws-hw-tgt-bssid" class="form-control mono" placeholder="AA:BB:CC:DD:EE:FF"></div>
+        <div class="form-group"><label class="form-label">Channel</label>
+          <input type="number" id="ws-hw-tgt-ch" class="form-control" value="6" min="1" max="165"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Capture duration (sec)</label>
+          <input type="number" id="ws-hw-cap-dur" class="form-control" value="60" min="15" max="300"></div>
+        <div class="form-group"><label class="form-label">Deauth client MAC (optional — only your own devices!)</label>
+          <input type="text" id="ws-hw-deauth" class="form-control mono" placeholder="(passive if empty)"></div>
+      </div>
+      <button class="btn btn-primary" onclick="wsHwCapture()"><i class="fas fa-download"></i> Capture handshake</button>
+      <div id="ws-hw-cap-out" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Step 5: Crack (hand-off to real cracker tab) -->
+    <div class="card" style="border-left:3px solid var(--gold-light)">
+      <div class="card-title"><i class="fas fa-key"></i> Step 5 — Crack the captured hash</div>
+      <div style="font-size:.85em;margin-top:6px">Once Step 4 captures a handshake, the <code>hc22000</code> hash appears above. Copy it into the <strong>⚡ REAL Cracker</strong> tab, or use hashcat locally:
+        <pre style="background:var(--bg);padding:10px;border-radius:4px;color:var(--teal);font-size:.82em;margin-top:8px;overflow-x:auto">hashcat -a 0 -m 22000 hashes.hc22000 /usr/share/wordlists/rockyou.txt</pre>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -86,6 +278,279 @@ async function wsRogue(){
     data.rogue_aps.forEach(r=>{html+=`  <span class="output-line warning">${esc(r.ssid)} | ${esc(r.bssid)} — ${esc(r.description||'')}</span>\n`;});}
   if(!data.total_rogues)html+='<span class="output-line success">✓ No rogue APs detected</span>';
   out.innerHTML=html;
+}
+
+/* ─── REAL WPA2 Cracker ───────────────────────────────────────── */
+async function wsRealCrack(){
+  const hc = document.getElementById('ws-hc').value.trim();
+  if(!hc || !hc.startsWith('WPA')) return alert('Paste a valid hc22000 line (starts with WPA*02*...)');
+  const wl = document.getElementById('ws-real-wl').value;
+  const mw = document.getElementById('ws-max-words').value;
+  const to = document.getElementById('ws-timeout').value;
+  const out = document.getElementById('ws-real-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Running PBKDF2 + MIC verification…<br><span style="color:var(--muted);font-size:.8em">Real crypto — this takes up to '+to+' seconds.</span></div>';
+  const data = await apiPost('/api/wireless/crack-real',{hc22000:hc,wordlist:wl,max_words:parseInt(mw),timeout_sec:parseInt(to)});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  const hs = data.handshake||{};const cr=data.crack||{};
+  const vc = cr.cracked?'var(--success)':'var(--warning)';
+  out.innerHTML=`
+  <div class="card" style="border:2px solid ${vc}">
+    <div style="text-align:center;padding:14px 0">
+      <div style="font-size:.75em;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:700">Cracking Result</div>
+      <div style="font-size:1.5em;font-weight:800;color:${vc};margin:10px 0">${cr.cracked?'✓ PASSWORD FOUND':'✗ Not in wordlist'}</div>
+      ${cr.cracked?`<div style="font-family:'Courier New',monospace;font-size:1.3em;background:var(--bg);padding:12px 20px;display:inline-block;border-radius:6px;color:var(--gold-light);letter-spacing:2px">${esc(cr.password)}</div>`:''}
+    </div>
+  </div>
+  <div class="grid-2" style="margin-top:12px">
+    <div class="card"><div class="card-title"><i class="fas fa-wifi"></i> Handshake</div>
+      <div style="font-size:.85em;margin-top:8px">
+        <div><strong>SSID:</strong> ${esc(hs.ssid||'?')}</div>
+        <div><strong>AP MAC:</strong> <span class="mono">${esc(hs.ap_mac||'?')}</span></div>
+        <div><strong>Client MAC:</strong> <span class="mono">${esc(hs.sta_mac||'?')}</span></div>
+        <div><strong>Cipher:</strong> ${esc(hs.cipher||'?')}</div>
+        <div><strong>Type:</strong> ${esc(hs.kind||'?')} (msg pair ${esc(hs.message_pair||'?')})</div>
+      </div></div>
+    <div class="card"><div class="card-title"><i class="fas fa-tachometer-alt"></i> Attack Stats</div>
+      <div style="font-size:.85em;margin-top:8px">
+        <div><strong>Words tried:</strong> ${cr.attempts||0}</div>
+        <div><strong>Elapsed:</strong> ${cr.elapsed_sec||0}s</div>
+        <div><strong>Rate:</strong> ${cr.attempts&&cr.elapsed_sec?Math.round(cr.attempts/cr.elapsed_sec):0} PMK/sec</div>
+        ${cr.timeout?'<div style="color:var(--warning);margin-top:6px"><i class="fas fa-clock"></i> Timed out</div>':''}
+      </div></div>
+  </div>
+  ${cr.note?`<div class="alert alert-info" style="margin-top:12px"><i class="fas fa-info-circle"></i> ${esc(cr.note)}</div>`:''}
+  ${cr.cracked?`<div class="card" style="margin-top:12px;border-left:3px solid var(--danger)"><div class="card-title"><i class="fas fa-shield-alt"></i> URGENT Remediation</div>
+    <ol style="font-size:.88em;line-height:1.8;margin-top:8px;padding-left:20px">
+      <li>Change the WiFi password NOW — pick 20+ random characters using a password manager.</li>
+      <li>If router supports it, switch encryption to WPA3-Personal (SAE) — resistant to offline dictionary attack.</li>
+      <li>Disable WPS on the router (attacker can bypass WPA2 via WPS PIN).</li>
+      <li>Check router admin panel for unauthorised port-forwards, DNS changes, or new admin users.</li>
+      <li>Rotate any credential that was ever entered on a device connected to this WiFi.</li>
+    </ol></div>`:''}
+  `;
+}
+
+/* ─── WiGLE ───────────────────────────────────────────────────── */
+async function wsWigle(){
+  const q = document.getElementById('ws-wigle-q').value.trim();
+  const u = document.getElementById('ws-wigle-user').value.trim();
+  const t = document.getElementById('ws-wigle-token').value.trim();
+  if(!q) return alert('Enter SSID or BSSID');
+  const out = document.getElementById('ws-wigle-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Querying WiGLE.net…</div>';
+  const data = await apiPost('/api/wireless/wigle',{query:q,api_user:u,api_token:t});
+  if(data.error){
+    out.innerHTML=`<div class="alert alert-warning"><i class="fas fa-info-circle"></i> ${esc(data.error)}${data.signup?`<br><a href="${esc(data.signup)}" target="_blank" style="color:var(--accent)">${esc(data.signup)}</a>`:''}${data.manual_search?`<br>Manual search: <a href="${esc(data.manual_search)}" target="_blank" style="color:var(--accent)">${esc(data.manual_search)}</a>`:''}</div>`;
+    return;
+  }
+  const nets = data.networks||[];
+  out.innerHTML=`
+    <div class="card"><div class="card-title"><i class="fas fa-map-marked-alt"></i> WiGLE Results: ${data.total_results||0} networks</div>
+      ${data.privacy_finding?`<div class="alert alert-danger" style="margin-top:10px"><strong>[${esc(data.privacy_finding.severity)}]</strong> ${esc(data.privacy_finding.description)}<br><em>→ ${esc(data.privacy_finding.remediation)}</em></div>`:''}
+      ${nets.length?`<table class="data-table" style="margin-top:12px">
+        <tr><th>SSID</th><th>BSSID</th><th>Encryption</th><th>Location</th><th>Last Seen</th></tr>
+        ${nets.map(n=>`<tr><td>${esc(n.ssid||'')}</td><td class="mono">${esc(n.bssid||'')}</td><td>${esc(n.encryption||'?')}</td><td style="font-size:.82em">${esc([n.city,n.region,n.country].filter(Boolean).join(', '))}${n.lat?` <a href="https://www.openstreetmap.org/?mlat=${n.lat}&mlon=${n.lon}&zoom=17" target="_blank" style="color:var(--accent)"><i class="fas fa-map-pin"></i></a>`:''}</td><td style="font-size:.78em">${esc(n.last_seen||'?')}</td></tr>`).join('')}
+      </table>`:'<div style="color:var(--muted);margin-top:10px">No results.</div>'}
+    </div>`;
+}
+
+/* ─── Router Defaults ─────────────────────────────────────────── */
+async function wsDefaults(){
+  const q = document.getElementById('ws-router-q').value.trim();
+  const out = document.getElementById('ws-defaults-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/wireless/router-defaults',{vendor:q});
+  out.innerHTML=`
+    <div class="card"><div class="card-title"><i class="fas fa-key"></i> ${data.count} default credential(s)</div>
+      ${data.recommendation?`<div class="alert alert-danger" style="margin-top:10px"><i class="fas fa-exclamation-triangle"></i> ${esc(data.recommendation)}</div>`:''}
+      ${data.count?`<table class="data-table" style="margin-top:12px">
+        <tr><th>Vendor</th><th>Username</th><th>Password</th><th>Notes</th></tr>
+        ${data.matches.map(m=>`<tr><td>${esc(m.vendor)}</td><td class="mono" style="color:var(--warning)">${esc(m.username)}</td><td class="mono" style="color:var(--danger)">${esc(m.password)}</td><td style="font-size:.82em">${esc(m.note||'')}</td></tr>`).join('')}
+      </table>`:`<div style="color:var(--muted);margin-top:10px">${esc(data.note||'')}</div>`}
+      <div class="alert alert-info" style="margin-top:12px"><i class="fas fa-lightbulb"></i>
+        Test at <code>http://192.168.1.1</code> or <code>http://192.168.0.1</code> or <code>http://10.0.0.1</code>. If any credential works, change it immediately and enable 2FA if available.</div>
+    </div>`;
+}
+
+/* ─── Attack Playbook ─────────────────────────────────────────── */
+async function wsPlaybook(){
+  const ssid = document.getElementById('ws-pb-ssid').value.trim()||'TARGET_SSID';
+  const bssid = document.getElementById('ws-pb-bssid').value.trim()||'AA:BB:CC:DD:EE:FF';
+  const ch = document.getElementById('ws-pb-ch').value||6;
+  const iface = document.getElementById('ws-pb-iface').value.trim()||'wlan0';
+  const out = document.getElementById('ws-pb-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Building playbook…</div>';
+  const data = await apiPost('/api/wireless/playbook',{ssid,bssid,channel:ch,interface:iface});
+  let html = `<div class="card"><div class="card-title"><i class="fas fa-clipboard-list"></i> Prerequisites</div>
+    <ul style="font-size:.85em;line-height:1.8;margin-top:8px;padding-left:20px">${(data.prerequisites||[]).map(p=>`<li>${esc(p)}</li>`).join('')}</ul></div>`;
+  (data.phases||[]).forEach(p=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-play-circle"></i> ${esc(p.phase)}</div>`;
+    if(p.what_it_does) html += `<div style="color:var(--muted);font-size:.85em;margin-top:6px">${esc(p.what_it_does)}</div>`;
+    if(p.commands) html += `<pre style="background:var(--bg);padding:12px;border-radius:6px;color:var(--teal);font-size:.82em;margin-top:8px;overflow-x:auto">${(p.commands||[]).map(c=>esc(c)).join('\n')}</pre>`;
+    if(p.options){
+      p.options.forEach(o=>{
+        html += `<div style="margin-top:12px;padding:10px;background:var(--surface2);border-radius:6px">
+          <div style="font-weight:700;color:var(--gold-light);font-size:.9em">${esc(o.method)}</div>
+          ${o.warning?`<div class="alert alert-warning" style="font-size:.82em;margin:6px 0"><i class="fas fa-exclamation-triangle"></i> ${esc(o.warning)}</div>`:''}
+          <pre style="background:var(--bg);padding:10px;border-radius:4px;color:var(--teal);font-size:.8em;margin-top:6px;overflow-x:auto">${(o.commands||[]).map(c=>esc(c)).join('\n')}</pre>
+          ${o.expected_speed?`<div style="color:var(--muted);font-size:.78em;margin-top:6px">${esc(o.expected_speed)}</div>`:''}
+        </div>`;
+      });
+    }
+    html += `</div>`;
+  });
+  if(data.cleanup){
+    html += `<div class="card"><div class="card-title"><i class="fas fa-broom"></i> Cleanup</div>
+      <pre style="background:var(--bg);padding:12px;border-radius:6px;color:var(--teal);font-size:.82em;margin-top:8px;overflow-x:auto">${(data.cleanup||[]).map(c=>esc(c)).join('\n')}</pre></div>`;
+  }
+  out.innerHTML = html;
+}
+
+/* ─── Full Audit ──────────────────────────────────────────────── */
+async function wsAudit(){
+  const ssid = document.getElementById('ws-a-ssid').value.trim();
+  const bssid = document.getElementById('ws-a-bssid').value.trim();
+  const enc = document.getElementById('ws-a-enc').value;
+  if(!ssid) return alert('Enter your SSID');
+  const out = document.getElementById('ws-audit-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/wireless/full-audit',{ssid,bssid,encryption:enc});
+  const vc = data.risk_score>=80?'var(--critical)':data.risk_score>=50?'var(--danger)':data.risk_score>=25?'var(--warning)':'var(--success)';
+  let html = `
+    <div class="card" style="border:2px solid ${vc}">
+      <div style="text-align:center;padding:14px 0">
+        <div style="font-size:.75em;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:700">WiFi Security Verdict</div>
+        <div style="font-size:1.35em;font-weight:800;color:${vc};margin:10px 0">${esc(data.overall_verdict||'?')}</div>
+        <div style="font-size:.9em;color:var(--muted)">Risk Score: ${data.risk_score||0}/100</div>
+      </div>
+    </div>
+    ${(data.findings||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-bug"></i> Findings (${data.findings.length})</div>
+      ${data.findings.map(f=>`<div style="padding:12px;background:var(--surface2);margin:8px 0;border-left:3px solid ${f.severity==='CRITICAL'?'var(--critical)':f.severity==='HIGH'?'var(--danger)':'var(--warning)'};border-radius:4px;font-size:.88em">
+        <strong>${esc(f.type)}</strong> <span class="badge badge-${(f.severity||'info').toLowerCase()}">${esc(f.severity||'')}</span>${f.cvss?` <span style="color:var(--muted)">CVSS ${f.cvss}</span>`:''}
+        <div style="margin-top:6px">${esc(f.description||'')}</div>
+        ${f.impact?`<div style="margin-top:4px;color:var(--warning)"><strong>Impact:</strong> ${esc(f.impact)}</div>`:''}
+        ${f.remediation?`<div style="margin-top:4px;color:var(--accent)">→ ${esc(f.remediation)}</div>`:''}
+      </div>`).join('')}</div>`:''}
+    <div class="card"><div class="card-title"><i class="fas fa-list-check"></i> Remediation Roadmap</div>
+      <table class="data-table" style="margin-top:8px"><tr><th>Priority</th><th>Action</th></tr>
+      ${(data.remediation||[]).map(r=>`<tr><td><span class="badge badge-${r.priority==='P1'?'critical':r.priority==='P2'?'high':r.priority==='P3'?'medium':'low'}">${esc(r.priority)}</span></td><td>${esc(r.action)}</td></tr>`).join('')}
+      </table></div>
+    <div class="card"><div class="card-title"><i class="fas fa-check-square"></i> Controls Checklist</div>
+      <table class="data-table" style="margin-top:8px"><tr><th>☐</th><th>Control</th><th>Critical?</th></tr>
+      ${(data.controls_checklist||[]).map(c=>`<tr><td style="width:30px">☐</td><td>${esc(c.control)}</td><td>${c.critical?'<span class="badge badge-critical">YES</span>':'—'}</td></tr>`).join('')}
+      </table></div>
+  `;
+  out.innerHTML = html;
+}
+
+/* ─── LIVE HARDWARE — USB antenna + monitor + scan + capture ─── */
+async function wsHwDetect(){
+  const out = document.getElementById('ws-hw-detect-out');
+  out.innerHTML='<span class="spinner"></span> Enumerating USB devices…';
+  const data = await apiPost('/api/wireless/hw/detect',{});
+  if(data.error){
+    out.innerHTML=`<div class="alert alert-warning"><i class="fas fa-info-circle"></i> ${esc(data.error)}
+      ${data.how_to_run_locally?`<pre style="background:var(--bg);padding:10px;margin-top:8px;font-size:.82em;color:var(--teal)">${(data.how_to_run_locally||[]).map(l=>esc(l)).join('\n')}</pre>`:''}
+      ${data.required_tools?`<div style="margin-top:8px;font-size:.85em"><strong>Required tools:</strong><br>${(data.required_tools||[]).map(t=>esc(t)).join('<br>')}</div>`:''}
+    </div>`;
+    return;
+  }
+  const adapters = data.wifi_adapters||[];
+  const ifaces = data.interfaces||[];
+  out.innerHTML=`
+    <div class="alert alert-info"><i class="fas fa-check-circle"></i> ${esc(data.message||'')} (${esc(data.platform)})</div>
+    ${adapters.length?`<div style="margin-top:10px"><strong>WiFi adapters:</strong>
+      ${adapters.map(a=>`<div style="padding:10px;background:var(--surface2);margin:6px 0;border-left:3px solid ${a.recommended?'var(--success)':'var(--warning)'};border-radius:4px;font-size:.85em">
+        ${a.recommended?'<span class="badge badge-low">✓ MONITOR-CAPABLE</span> ':''}
+        <strong>${esc(a.chipset||a.description||a.name||'?')}</strong>
+        <div style="font-size:.8em;color:var(--muted);margin-top:2px">ID: <span class="mono">${esc(a.id||a.vendor_id+':'+a.product_id||'?')}</span></div>
+        ${a.note?`<div style="font-size:.8em;color:var(--accent);margin-top:2px">${esc(a.note)}</div>`:''}
+      </div>`).join('')}
+    </div>`:''}
+    ${ifaces.length?`<div style="margin-top:10px"><strong>Wireless interfaces:</strong>
+      <table class="data-table" style="margin-top:6px"><tr><th>Name</th><th>Mode</th><th>MAC</th></tr>
+      ${ifaces.map(i=>`<tr><td class="mono">${esc(i.name)}</td><td>${esc(i.mode)}</td><td class="mono">${esc(i.mac)}</td></tr>`).join('')}
+      </table></div>`:''}
+    ${(data.notes||[]).length?`<div style="margin-top:10px;color:var(--muted);font-size:.82em">${(data.notes||[]).map(n=>esc(n)).join('<br>')}</div>`:''}`;
+}
+
+async function wsHwCheck(){
+  const iface = document.getElementById('ws-hw-iface').value.trim()||'wlan0';
+  const out = document.getElementById('ws-hw-mon-out');
+  out.innerHTML='<span class="spinner"></span>';
+  const data = await apiPost('/api/wireless/hw/check-monitor',{interface:iface});
+  if(data.error){out.innerHTML=`<div class="alert alert-warning">${esc(data.error)}${data.detail?'<br><code>'+esc(data.detail)+'</code>':''}</div>`;return;}
+  out.innerHTML=`<div class="card" style="padding:12px;font-size:.88em">
+    <div><strong>PHY:</strong> ${esc(data.phy)}</div>
+    <div><strong>Modes supported:</strong> ${(data.supported_modes||[]).join(', ')}</div>
+    <div style="margin-top:6px">${data.monitor_supported?'<span style="color:var(--success);font-weight:700">✓ Monitor mode SUPPORTED</span>':'<span style="color:var(--danger);font-weight:700">✗ Monitor mode NOT supported by this chipset</span>'}</div>
+    <div style="color:var(--muted);font-size:.82em;margin-top:6px">${esc(data.injection_note||'')}</div>
+  </div>`;
+}
+
+async function wsHwEnable(){
+  const iface = document.getElementById('ws-hw-iface').value.trim()||'wlan0';
+  const out = document.getElementById('ws-hw-mon-out');
+  out.innerHTML='<span class="spinner"></span> Enabling monitor mode (killing NetworkManager)…';
+  const data = await apiPost('/api/wireless/hw/enable-monitor',{interface:iface});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}${data.hint?'<br>'+esc(data.hint):''}</div>`;return;}
+  if(data.success){
+    document.getElementById('ws-hw-mon-iface').value = data.monitor_interface||iface+'mon';
+    out.innerHTML=`<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${esc(data.message)}</div>
+      <pre style="background:var(--bg);padding:10px;font-size:.78em;color:var(--muted);margin-top:6px">${esc((data.start_output||'').slice(0,600))}</pre>`;
+  }else{
+    out.innerHTML=`<div class="alert alert-warning">${esc(data.message)}<pre style="font-size:.78em;margin-top:6px">${esc(data.start_output||'')}</pre></div>`;
+  }
+}
+
+async function wsHwDisable(){
+  const iface = document.getElementById('ws-hw-mon-iface').value.trim()||'wlan0mon';
+  const out = document.getElementById('ws-hw-mon-out');
+  out.innerHTML='<span class="spinner"></span>';
+  const data = await apiPost('/api/wireless/hw/disable-monitor',{interface:iface});
+  if(data.error){out.innerHTML=`<div class="alert alert-warning">${esc(data.error)}</div>`;return;}
+  out.innerHTML=`<div class="alert alert-info">Monitor disabled. NetworkManager restarted.<pre style="font-size:.78em;margin-top:6px">${esc(data.stop_output||'')}</pre></div>`;
+}
+
+async function wsHwScan(){
+  const iface = document.getElementById('ws-hw-mon-iface').value.trim()||'wlan0mon';
+  const dur = document.getElementById('ws-hw-duration').value||15;
+  const out = document.getElementById('ws-hw-scan-out');
+  out.innerHTML='<span class="spinner"></span> Scanning for '+dur+'s…';
+  const data = await apiPost('/api/wireless/hw/live-scan',{interface:iface,duration:parseInt(dur)});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  const aps = data.access_points||[];
+  out.innerHTML=`<div><strong>${aps.length} APs</strong> · <strong>${data.client_count||0} clients</strong> in ${dur}s</div>
+    ${aps.length?`<table class="data-table" style="margin-top:8px"><tr><th>BSSID</th><th>Ch</th><th>Power</th><th>Enc</th><th>SSID</th><th></th></tr>
+    ${aps.map(a=>`<tr><td class="mono">${esc(a.bssid)}</td><td>${esc(a.channel)}</td><td>${esc(a.power)}</td><td>${esc(a.privacy)}/${esc(a.cipher)}</td><td>${esc(a.ssid)}</td><td><button class="btn btn-sm btn-primary" onclick="wsPickTarget('${esc(a.bssid)}',${parseInt(a.channel)||6})">Target</button></td></tr>`).join('')}
+    </table>`:''}`;
+}
+
+function wsPickTarget(bssid, ch){
+  document.getElementById('ws-hw-tgt-bssid').value = bssid;
+  document.getElementById('ws-hw-tgt-ch').value = ch;
+  document.getElementById('ws-hw-tgt-bssid').scrollIntoView({behavior:'smooth',block:'center'});
+}
+
+async function wsHwCapture(){
+  const iface = document.getElementById('ws-hw-mon-iface').value.trim()||'wlan0mon';
+  const bssid = document.getElementById('ws-hw-tgt-bssid').value.trim();
+  const ch = document.getElementById('ws-hw-tgt-ch').value;
+  const dur = document.getElementById('ws-hw-cap-dur').value;
+  const deauth = document.getElementById('ws-hw-deauth').value.trim();
+  if(!bssid) return alert('Enter target BSSID');
+  const out = document.getElementById('ws-hw-cap-out');
+  out.innerHTML='<span class="spinner"></span> Capturing (up to '+dur+'s)…';
+  const data = await apiPost('/api/wireless/hw/capture',{interface:iface,bssid,channel:parseInt(ch),duration:parseInt(dur),deauth_client:deauth});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  if(data.handshake_captured){
+    out.innerHTML=`<div class="alert alert-success"><i class="fas fa-check-circle"></i> ${esc(data.message)}</div>
+      <div style="margin-top:10px"><strong>hc22000 hash — copy into REAL Cracker tab:</strong></div>
+      <textarea class="form-control mono" rows="4" readonly style="margin-top:6px">${esc(data.hc22000)}</textarea>
+      <button class="btn btn-primary" onclick="document.getElementById('ws-hc').value=${JSON.stringify(data.hc22000)};document.querySelector('[data-tab=&quot;ws-real-crack&quot;]').click();" style="margin-top:8px"><i class="fas fa-arrow-right"></i> Auto-fill REAL Cracker tab</button>`;
+  }else{
+    out.innerHTML=`<div class="alert alert-warning">${esc(data.message)}${data.conv_stderr?'<pre style="font-size:.78em;margin-top:6px">'+esc(data.conv_stderr)+'</pre>':''}</div>`;
+  }
 }
 </script>
 {% endblock %}

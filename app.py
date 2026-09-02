@@ -531,6 +531,91 @@ def api_rogue_ap():
     data = request.json
     return jsonify(detect_rogue_ap(data.get("known",[]), data.get("scanned",None)))
 
+@app.route("/api/wireless/parse-hc22000", methods=["POST"])
+def api_parse_hc22000():
+    from modules.wireless import parse_hc22000
+    return jsonify(parse_hc22000(request.json.get("text","")))
+
+@app.route("/api/wireless/crack-real", methods=["POST"])
+def api_wpa_crack_real():
+    from modules.wireless import parse_hc22000, crack_wpa2_wordlist
+    d = request.json
+    parsed = parse_hc22000(d.get("hc22000",""))
+    if not parsed.get("handshakes"):
+        return jsonify({"error":"No valid handshake found in input","parse_errors":parsed.get("errors",[])})
+    hs = parsed["handshakes"][0]
+    return jsonify({
+        "handshake": {k:hs.get(k) for k in ("ssid","ap_mac","sta_mac","cipher","message_pair","kind")},
+        "crack":     crack_wpa2_wordlist(hs, d.get("wordlist",""),
+                                          int(d.get("max_words",5000)),
+                                          int(d.get("timeout_sec",25))),
+    })
+
+@app.route("/api/wireless/wigle", methods=["POST"])
+def api_wigle():
+    from modules.wireless import wigle_ssid_lookup
+    d = request.json
+    return jsonify(wigle_ssid_lookup(d.get("query",""),
+                                     d.get("api_user",""), d.get("api_token","")))
+
+@app.route("/api/wireless/router-defaults", methods=["POST"])
+def api_router_defaults():
+    from modules.wireless import router_default_creds
+    return jsonify(router_default_creds(request.json.get("vendor","")))
+
+@app.route("/api/wireless/playbook", methods=["POST"])
+def api_wifi_playbook():
+    from modules.wireless import wifi_attack_playbook
+    d = request.json
+    return jsonify(wifi_attack_playbook(
+        d.get("ssid","TARGET_SSID"), d.get("bssid","AA:BB:CC:DD:EE:FF"),
+        int(d.get("channel",6)), d.get("interface","wlan0")))
+
+@app.route("/api/wireless/full-audit", methods=["POST"])
+def api_wifi_full_audit():
+    from modules.wireless import wifi_full_audit
+    d = request.json
+    return jsonify(wifi_full_audit(d.get("ssid",""), d.get("bssid",""),
+                                    d.get("encryption","WPA2-Personal")))
+
+# ─── LIVE HARDWARE (only works locally with sudo + USB adapter) ─────────────
+
+@app.route("/api/wireless/hw/detect", methods=["POST"])
+def api_wifi_hw_detect():
+    from modules.wireless import detect_usb_wifi_adapters
+    return jsonify(detect_usb_wifi_adapters())
+
+@app.route("/api/wireless/hw/check-monitor", methods=["POST"])
+def api_wifi_hw_check():
+    from modules.wireless import check_monitor_capability
+    return jsonify(check_monitor_capability(request.json.get("interface","wlan0")))
+
+@app.route("/api/wireless/hw/enable-monitor", methods=["POST"])
+def api_wifi_hw_enable():
+    from modules.wireless import enable_monitor_mode
+    return jsonify(enable_monitor_mode(request.json.get("interface","wlan0")))
+
+@app.route("/api/wireless/hw/disable-monitor", methods=["POST"])
+def api_wifi_hw_disable():
+    from modules.wireless import disable_monitor_mode
+    return jsonify(disable_monitor_mode(request.json.get("interface","wlan0mon")))
+
+@app.route("/api/wireless/hw/live-scan", methods=["POST"])
+def api_wifi_hw_scan():
+    from modules.wireless import airodump_scan_live
+    d = request.json
+    return jsonify(airodump_scan_live(d.get("interface","wlan0mon"),
+                                       int(d.get("duration",15))))
+
+@app.route("/api/wireless/hw/capture", methods=["POST"])
+def api_wifi_hw_capture():
+    from modules.wireless import capture_handshake_live
+    d = request.json
+    return jsonify(capture_handshake_live(
+        d.get("interface","wlan0mon"), d.get("bssid",""),
+        int(d.get("channel",6)), int(d.get("duration",60)),
+        d.get("deauth_client","")))
+
 # ─── Cloud Security APIs ─────────────────────────────────────────────────────
 
 @app.route("/api/cloud/dockerfile", methods=["POST"])
