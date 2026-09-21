@@ -616,6 +616,68 @@ def api_wifi_hw_capture():
         int(d.get("channel",6)), int(d.get("duration",60)),
         d.get("deauth_client","")))
 
+# ─── Smart Metering Penetration Testing ─────────────────────────────────────
+
+@app.route("/smart-metering")
+def smart_metering_page():
+    return render_template("smart_metering.html")
+
+@app.route("/api/smart-meter/dlms", methods=["POST"])
+def api_sm_dlms():
+    from modules.smart_metering import analyze_dlms_apdu
+    return jsonify(analyze_dlms_apdu(request.json.get("hex","")))
+
+@app.route("/api/smart-meter/wmbus", methods=["POST"])
+def api_sm_wmbus():
+    from modules.smart_metering import parse_wmbus_telegram
+    return jsonify(parse_wmbus_telegram(request.json.get("hex","")))
+
+@app.route("/api/smart-meter/c12", methods=["POST"])
+def api_sm_c12():
+    from modules.smart_metering import analyze_c12_packet
+    return jsonify(analyze_c12_packet(request.json.get("hex","")))
+
+@app.route("/api/smart-meter/cve", methods=["POST"])
+def api_sm_cve():
+    from modules.smart_metering import smart_meter_cve_lookup
+    d = request.json
+    return jsonify(smart_meter_cve_lookup(d.get("vendor",""), d.get("keyword","")))
+
+@app.route("/api/smart-meter/hes-scan", methods=["POST"])
+def api_sm_hes():
+    from modules.smart_metering import hes_endpoint_scan
+    return jsonify(hes_endpoint_scan(request.json.get("target","")))
+
+@app.route("/api/smart-meter/firmware", methods=["POST"])
+def api_sm_firmware():
+    from modules.smart_metering import analyze_meter_firmware
+    d = request.json
+    try:
+        file_bytes = base64.b64decode(d.get("data",""))
+    except Exception:
+        return jsonify({"error":"Invalid base64"}), 400
+    return jsonify(analyze_meter_firmware(file_bytes, d.get("filename","firmware.bin")))
+
+@app.route("/api/smart-meter/key", methods=["POST"])
+def api_sm_key():
+    from modules.smart_metering import analyze_meter_key
+    return jsonify(analyze_meter_key(request.json.get("key","")))
+
+@app.route("/api/smart-meter/playbook", methods=["POST"])
+def api_sm_playbook():
+    from modules.smart_metering import sdr_playbook
+    return jsonify(sdr_playbook(request.json.get("protocol","wmbus")))
+
+@app.route("/api/smart-meter/checklist", methods=["POST"])
+def api_sm_checklist():
+    from modules.smart_metering import physical_audit_checklist
+    return jsonify(physical_audit_checklist())
+
+@app.route("/api/smart-meter/compliance", methods=["POST"])
+def api_sm_compliance():
+    from modules.smart_metering import compliance_mapping
+    return jsonify(compliance_mapping())
+
 # ─── Cloud Security APIs ─────────────────────────────────────────────────────
 
 @app.route("/api/cloud/dockerfile", methods=["POST"])

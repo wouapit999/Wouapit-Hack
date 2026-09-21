@@ -131,6 +131,20 @@
     <li class="nav-item {% if request.endpoint == 'reports' %}active{% endif %}">
       <a href="{{ url_for('reports') }}"><i class="fas fa-file-pdf"></i><span>Reports (PDF / DOCX)</span></a>
     </li>
+
+    <!-- ═══════════ SMART METERING (last item) ═══════════ -->
+    <li class="nav-domain telecom">
+      <i class="fas fa-bolt"></i> SMART GRID
+    </li>
+    <li class="nav-item {% if request.endpoint == 'smart_metering_page' %}active{% endif %}">
+      <a href="{{ url_for('smart_metering_page') }}"><i class="fas fa-tachometer-alt"></i><span>Smart Metering Pentest</span></a>
+    </li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-dlms"><i class="fas fa-angle-right"></i><span>DLMS/COSEM</span></a></li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-wmbus"><i class="fas fa-angle-right"></i><span>Wireless M-Bus</span></a></li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-c12"><i class="fas fa-angle-right"></i><span>ANSI C12</span></a></li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-hes"><i class="fas fa-angle-right"></i><span>HES / MDMS Scan</span></a></li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-firmware"><i class="fas fa-angle-right"></i><span>Firmware Analysis</span></a></li>
+    <li class="nav-sub-item"><a href="{{ url_for('smart_metering_page') }}#sm-checklist"><i class="fas fa-angle-right"></i><span>Physical Audit</span></a></li>
   </ul>
 
   <style>

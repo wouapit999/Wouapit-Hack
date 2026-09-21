@@ -1,0 +1,290 @@
+{% extends "base.html" %}
+{% block title %}Smart Metering Pentest – Wouapit-Hack{% endblock %}
+{% block page_title %}<i class="fas fa-bolt" style="color:var(--accent)"></i> Smart Metering Penetration Testing{% endblock %}
+{% block content %}
+<div class="alert alert-danger">
+  <i class="fas fa-radiation"></i>
+  <div><strong>Critical infrastructure — authorised testing only.</strong> Smart meters carry billing and grid-control data. Test only meters you own, are contracted to assess, or which are part of a bug-bounty programme. Unauthorised tampering with utility meters is a criminal offence in every jurisdiction.</div>
+</div>
+
+<div class="tab-container card" style="padding-bottom:0">
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="sm-dlms">DLMS/COSEM</button>
+    <button class="tab-btn" data-tab="sm-wmbus">Wireless M-Bus</button>
+    <button class="tab-btn" data-tab="sm-c12">ANSI C12</button>
+    <button class="tab-btn" data-tab="sm-cve">Meter CVEs</button>
+    <button class="tab-btn" data-tab="sm-hes">HES/MDMS Scan</button>
+    <button class="tab-btn" data-tab="sm-firmware">Firmware Analysis</button>
+    <button class="tab-btn" data-tab="sm-key">Key Analyzer</button>
+    <button class="tab-btn" data-tab="sm-playbook">Attack Playbook</button>
+    <button class="tab-btn" data-tab="sm-checklist">Physical Audit</button>
+    <button class="tab-btn" data-tab="sm-compliance">Compliance</button>
+  </div>
+
+  <div class="tab-panel active" id="sm-dlms" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i>
+      DLMS/COSEM (IEC 62056) is the dominant AMI protocol worldwide. Paste a captured APDU as hex (with or without HDLC 0x7E flags).
+    </div>
+    <div class="form-group"><label class="form-label">APDU hex</label>
+      <textarea id="sm-dlms-hex" class="form-control mono" rows="4" placeholder="60 1F A1 09 06 07 60 85 74 05 08 01 01 8A 02 07 80 8B 07 60 85 74 05 08 02 01 AC 0A 80 08 30 30 30 30 30 30 30 30"></textarea></div>
+    <button class="btn btn-primary" onclick="smDlms()"><i class="fas fa-microscope"></i> Analyse APDU</button>
+    <div class="output-box" id="sm-dlms-out" style="margin-top:16px"><span class="output-placeholder">DLMS analysis…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="sm-wmbus" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i>
+      Paste a Wireless M-Bus telegram (EN 13757-4) as hex. Capture via <code>rtl_wmbus</code> or <code>wmbusmeters</code> on 868/169 MHz.
+    </div>
+    <div class="form-group"><label class="form-label">wM-Bus telegram hex</label>
+      <textarea id="sm-wmbus-hex" class="form-control mono" rows="4" placeholder="1E 44 AE 4C 22 22 22 22 01 07 72 22 22 22 22 AE 4C 01 07 6C 00 05 A1 00 00 00"></textarea></div>
+    <button class="btn btn-primary" onclick="smWmbus()"><i class="fas fa-broadcast-tower"></i> Parse Telegram</button>
+    <div class="output-box" id="sm-wmbus-out" style="margin-top:16px"><span class="output-placeholder">wM-Bus decode…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="sm-c12" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i>
+      ANSI C12.19 / C12.22 is dominant in North American AMI.
+    </div>
+    <div class="form-group"><label class="form-label">C12 packet hex</label>
+      <textarea id="sm-c12-hex" class="form-control mono" rows="3" placeholder="30 00 2E — Read Full Table 46 (Password/Key)"></textarea></div>
+    <button class="btn btn-primary" onclick="smC12()"><i class="fas fa-microscope"></i> Analyse Packet</button>
+    <div class="output-box" id="sm-c12-out" style="margin-top:16px"><span class="output-placeholder">C12 analysis…</span><button class="copy-btn">📋 Copy</button></div>
+  </div>
+
+  <div class="tab-panel" id="sm-cve" style="padding:20px">
+    <div class="form-row">
+      <div class="form-group"><label class="form-label">Vendor</label>
+        <select id="sm-cve-vendor" class="form-control">
+          <option value="">— Select vendor —</option>
+          <option>Itron</option><option>Landis+Gyr</option><option>Sensus</option>
+          <option>Elster</option><option>Kamstrup</option><option>Aidon</option>
+          <option>Sagemcom</option><option>EDMI</option><option>Circutor</option>
+          <option>Iskra</option><option>Aclara</option><option>Honeywell</option>
+          <option>Schneider Electric</option><option>Siemens</option>
+          <option>GE Digital Energy</option><option>ABB</option>
+          <option>Diehl</option><option>Techem</option><option>Qundis</option>
+          <option>Zenner</option><option>Apator</option><option>Hexing</option>
+          <option>Wasion</option><option>Holley Metering</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Extra keyword (optional)</label>
+        <input type="text" id="sm-cve-kw" class="form-control" placeholder="firmware, authentication, buffer overflow"></div>
+    </div>
+    <button class="btn btn-primary" onclick="smCve()"><i class="fas fa-bug"></i> Search NVD</button>
+    <div id="sm-cve-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-hes" style="padding:20px">
+    <div class="alert alert-warning"><i class="fas fa-exclamation-triangle"></i>
+      Probes 32+ known Head-End System / MDMS paths. Only scan targets you own or are authorised to test.
+    </div>
+    <div class="form-group"><label class="form-label">HES / MDMS URL</label>
+      <input type="text" id="sm-hes-url" class="form-control" placeholder="https://mdms.utility.example.com"></div>
+    <button class="btn btn-primary" onclick="smHes()"><i class="fas fa-search"></i> Scan HES Endpoints</button>
+    <div id="sm-hes-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-firmware" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i>
+      Extracts protocols in use, weak crypto indicators, hardcoded credentials, debug hooks, embedded URLs/IPs. Max 20 MB.
+    </div>
+    <div class="form-group"><label class="form-label">Meter firmware image (.bin / .fw / .hex / .rom)</label>
+      <input type="file" id="sm-fw-file" class="form-control"></div>
+    <button class="btn btn-primary" onclick="smFirmware()"><i class="fas fa-file-code"></i> Analyse Firmware</button>
+    <div id="sm-fw-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-key" style="padding:20px">
+    <div class="alert alert-info"><i class="fas fa-info-circle"></i>
+      Tests a proposed AES key against the public database of known default/test-vector keys, entropy, and pattern weaknesses.
+    </div>
+    <div class="form-group"><label class="form-label">AES key (hex, 32/48/64 chars)</label>
+      <input type="text" id="sm-key-hex" class="form-control mono" placeholder="00000000000000000000000000000000"></div>
+    <button class="btn btn-primary" onclick="smKey()"><i class="fas fa-key"></i> Analyse Key</button>
+    <div id="sm-key-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-playbook" style="padding:20px">
+    <div class="form-group"><label class="form-label">Protocol</label>
+      <select id="sm-pb-proto" class="form-control">
+        <option value="wmbus">Wireless M-Bus (868/169 MHz)</option>
+        <option value="dlms">DLMS/COSEM (TCP 4059 or serial)</option>
+        <option value="c12">ANSI C12.22 (TCP 1153)</option>
+      </select></div>
+    <button class="btn btn-primary" onclick="smPlaybook()"><i class="fas fa-clipboard-list"></i> Generate Attack Playbook</button>
+    <div id="sm-pb-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-checklist" style="padding:20px">
+    <button class="btn btn-primary" onclick="smChecklist()"><i class="fas fa-clipboard-check"></i> Show Physical Audit Checklist</button>
+    <div id="sm-cl-out" style="margin-top:16px"></div>
+  </div>
+
+  <div class="tab-panel" id="sm-compliance" style="padding:20px">
+    <button class="btn btn-primary" onclick="smCompliance()"><i class="fas fa-gavel"></i> Show Compliance Frameworks</button>
+    <div id="sm-comp-out" style="margin-top:16px"></div>
+  </div>
+</div>
+
+<script>
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function sb(s){return `<span class="badge badge-${(s||'info').toLowerCase()}">${esc(s||'')}</span>`;}
+
+function renderFindings(container, data, title){
+  if(data.error){container.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  let html = title?`<div class="output-line heading">${esc(title)}</div>\n`:'';
+  ['apdu_type','operation','ci_meaning','service_name','manufacturer','device_type_name','meter_id','obis','obis_meaning','auth_name']
+    .forEach(k=>{if(data[k]!==undefined)html+=`<div class="output-line info">${k}: ${esc(String(data[k]))}</div>`});
+  (data.findings||[]).forEach(f=>{
+    const cls = f.severity==='CRITICAL'?'error':f.severity==='HIGH'?'error':f.severity==='MEDIUM'?'warning':'info';
+    html += `\n<div class="output-line ${cls}">[${esc(f.severity)}] ${esc(f.type)}</div>`;
+    if(f.description)html+=`\n<div class="output-line">  ${esc(f.description)}</div>`;
+    if(f.remediation)html+=`\n<div class="output-line info">  → ${esc(f.remediation)}</div>`;
+  });
+  (data.info||[]).forEach(i=>html+=`\n<div class="output-line info">${esc(i)}</div>`);
+  container.innerHTML = html;
+}
+
+async function smDlms(){
+  const hex = document.getElementById('sm-dlms-hex').value.trim();
+  if(!hex) return alert('Paste APDU hex');
+  const out = document.getElementById('sm-dlms-out');
+  out.innerHTML='<span class="spinner"></span>';
+  renderFindings(out, await apiPost('/api/smart-meter/dlms',{hex}), 'DLMS/COSEM Analysis');
+}
+async function smWmbus(){
+  const hex = document.getElementById('sm-wmbus-hex').value.trim();
+  if(!hex) return alert('Paste wM-Bus hex');
+  const out = document.getElementById('sm-wmbus-out');
+  out.innerHTML='<span class="spinner"></span>';
+  renderFindings(out, await apiPost('/api/smart-meter/wmbus',{hex}), 'Wireless M-Bus Telegram');
+}
+async function smC12(){
+  const hex = document.getElementById('sm-c12-hex').value.trim();
+  if(!hex) return alert('Paste C12 packet hex');
+  const out = document.getElementById('sm-c12-out');
+  out.innerHTML='<span class="spinner"></span>';
+  renderFindings(out, await apiPost('/api/smart-meter/c12',{hex}), 'ANSI C12 Packet');
+}
+
+async function smCve(){
+  const v = document.getElementById('sm-cve-vendor').value;
+  const k = document.getElementById('sm-cve-kw').value.trim();
+  if(!v) return alert('Select vendor');
+  const out = document.getElementById('sm-cve-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Querying NVD…</div>';
+  const data = await apiPost('/api/smart-meter/cve',{vendor:v,keyword:k});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  out.innerHTML = `<div class="card"><div class="card-title"><i class="fas fa-bug"></i> ${data.count||0} CVE(s) for ${esc(v)}</div>
+    ${(data.cves||[]).length?`<table class="data-table" style="margin-top:8px"><tr><th>CVE</th><th>CVSS</th><th>Severity</th><th>Published</th><th>Description</th></tr>
+    ${data.cves.map(c=>`<tr><td class="mono"><a href="${esc(c.url)}" target="_blank" style="color:var(--accent)">${esc(c.id)}</a></td><td>${esc(String(c.cvss))}</td><td>${sb(c.severity)}</td><td>${esc(c.published)}</td><td style="font-size:.82em">${esc(c.description)}</td></tr>`).join('')}
+    </table>`:'<div style="color:var(--muted);margin-top:10px">No CVEs found. Try refining your keyword.</div>'}</div>`;
+}
+
+async function smHes(){
+  const url = document.getElementById('sm-hes-url').value.trim();
+  if(!url) return alert('Enter HES URL');
+  const out = document.getElementById('sm-hes-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Probing 32+ known HES paths…</div>';
+  const data = await apiPost('/api/smart-meter/hes-scan',{target:url});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  const resp = data.responsive||[], authed = data.authenticated||[];
+  out.innerHTML = `<div class="stats-grid" style="margin-bottom:12px">
+      <div class="stat-card"><div class="stat-icon red"><i class="fas fa-door-open"></i></div><div class="stat-info"><div class="number">${resp.length}</div><div class="label">Exposed (200)</div></div></div>
+      <div class="stat-card"><div class="stat-icon orange"><i class="fas fa-lock"></i></div><div class="stat-info"><div class="number">${authed.length}</div><div class="label">Auth required</div></div></div>
+      <div class="stat-card"><div class="stat-icon teal"><i class="fas fa-check-circle"></i></div><div class="stat-info"><div class="number">${(data.unreachable||[]).length}</div><div class="label">Unreachable</div></div></div>
+    </div>
+    ${resp.length?`<div class="card"><div class="card-title" style="color:var(--danger)"><i class="fas fa-exclamation-triangle"></i> Exposed endpoints</div>
+    <table class="data-table" style="margin-top:8px"><tr><th>Path</th><th>Status</th><th>Size</th><th>Server</th><th>Risk</th></tr>
+    ${resp.map(e=>`<tr><td class="mono">${esc(e.path)}</td><td>${e.status}</td><td>${e.size}</td><td>${esc(e.server||'?')}</td><td style="color:var(--danger)">${esc(e.risk)}</td></tr>`).join('')}
+    </table></div>`:''}
+    ${authed.length?`<div class="card"><div class="card-title"><i class="fas fa-lock"></i> Auth-protected (endpoint exists)</div>
+    <table class="data-table" style="margin-top:8px"><tr><th>Path</th><th>Status</th><th>Risk</th></tr>
+    ${authed.map(e=>`<tr><td class="mono">${esc(e.path)}</td><td>${e.status}</td><td style="color:var(--warning)">${esc(e.risk)}</td></tr>`).join('')}
+    </table></div>`:''}`;
+}
+
+async function smFirmware(){
+  const f = document.getElementById('sm-fw-file').files[0];
+  if(!f) return alert('Select firmware file');
+  if(f.size > 20*1024*1024) return alert('File too large (max 20MB)');
+  const out = document.getElementById('sm-fw-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span> Analysing firmware…</div>';
+  const buf = await f.arrayBuffer();
+  const b64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buf)));
+  const data = await apiPost('/api/smart-meter/firmware',{filename:f.name,data:b64});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  const vc = data.verdict==='HIGH RISK'?'var(--danger)':data.verdict==='MEDIUM RISK'?'var(--warning)':'var(--success)';
+  out.innerHTML = `<div class="card" style="border:2px solid ${vc}"><div style="text-align:center;padding:14px 0">
+      <div style="font-size:.75em;letter-spacing:2px;color:var(--muted);text-transform:uppercase;font-weight:700">Firmware Verdict</div>
+      <div style="font-size:1.4em;font-weight:800;color:${vc};margin:8px 0">${esc(data.verdict)}</div>
+      <div style="font-size:.9em;color:var(--muted)">Risk score: ${data.risk_score||0}/100 · ${data.size||0} bytes</div>
+      <div class="mono" style="font-size:.75em;color:var(--muted);margin-top:4px">SHA-256: ${esc(data.sha256||'')}</div>
+    </div></div>
+    <div class="card"><div class="card-title"><i class="fas fa-cogs"></i> Detected Protocols</div>
+      <div style="margin-top:8px">${(data.protocols||[]).map(p=>`<span class="badge badge-info">${esc(p)}</span>`).join(' ')||'<span style="color:var(--muted)">None detected</span>'}</div></div>
+    ${(data.findings||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-bug"></i> Findings (${data.findings.length})</div>
+      ${data.findings.map(f=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid ${f.severity==='CRITICAL'?'var(--critical)':f.severity==='HIGH'?'var(--danger)':'var(--warning)'};border-radius:4px;font-size:.85em"><strong>${esc(f.type)}</strong> ${sb(f.severity)}${f.occurrences?` <span style="color:var(--muted)">×${f.occurrences}</span>`:''}${f.description?`<div style="margin-top:4px;color:var(--muted)">${esc(f.description)}</div>`:''}${f.sample?`<div class="mono" style="font-size:.78em;color:var(--warning);margin-top:4px">${esc(f.sample)}</div>`:''}</div>`).join('')}</div>`:''}
+    ${(data.embedded_urls||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-link"></i> Embedded URLs (${data.embedded_urls.length})</div><div class="mono" style="font-size:.78em;margin-top:8px;max-height:150px;overflow-y:auto">${data.embedded_urls.slice(0,20).map(u=>`<div>${esc(u)}</div>`).join('')}</div></div>`:''}
+    ${(data.embedded_ips||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-network-wired"></i> Embedded IPs (${data.embedded_ips.length})</div><div class="mono" style="font-size:.78em;margin-top:8px">${data.embedded_ips.map(i=>`<div>${esc(i)}</div>`).join('')}</div></div>`:''}`;
+}
+
+async function smKey(){
+  const k = document.getElementById('sm-key-hex').value.trim();
+  if(!k) return alert('Enter key hex');
+  const out = document.getElementById('sm-key-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/smart-meter/key',{key:k});
+  if(data.error){out.innerHTML=`<div class="alert alert-danger">${esc(data.error)}</div>`;return;}
+  const good = (data.findings||[]).length === 0;
+  out.innerHTML = `<div class="card" style="border:2px solid ${good?'var(--success)':'var(--danger)'}">
+      <div style="text-align:center;padding:14px 0">
+        <div style="font-size:1.3em;font-weight:800;color:${good?'var(--success)':'var(--danger)'}">${good?'✓ Key looks strong':'✗ Weaknesses detected'}</div>
+        <div style="font-size:.85em;color:var(--muted);margin-top:4px">${data.length_bits} bits · ${esc(data.byte_diversity||'')}</div>
+      </div>
+    </div>
+    ${(data.findings||[]).length?`<div class="card"><div class="card-title"><i class="fas fa-exclamation-triangle"></i> Findings</div>
+      ${data.findings.map(f=>`<div style="padding:10px;background:var(--surface2);margin:8px 0;border-left:3px solid ${f.severity==='CRITICAL'?'var(--critical)':'var(--danger)'};border-radius:4px;font-size:.85em"><strong>${esc(f.type)}</strong> ${sb(f.severity)}${f.match?`<div style="margin-top:4px;color:var(--warning)">Match: ${esc(f.match)}</div>`:''}${f.description?`<div style="margin-top:4px;color:var(--muted)">${esc(f.description)}</div>`:''}${f.ascii?`<div class="mono" style="margin-top:4px;color:var(--warning)">ASCII: ${esc(f.ascii)}</div>`:''}${f.remediation?`<div style="margin-top:4px;color:var(--accent)">→ ${esc(f.remediation)}</div>`:''}</div>`).join('')}</div>`:''}`;
+}
+
+async function smPlaybook(){
+  const proto = document.getElementById('sm-pb-proto').value;
+  const out = document.getElementById('sm-pb-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/smart-meter/playbook',{protocol:proto});
+  let html = `<div class="card"><div class="card-title"><i class="fas fa-microchip"></i> Hardware options</div>
+    <ul style="font-size:.85em;line-height:1.8;margin-top:8px;padding-left:20px">${(data.hardware_options||[]).map(h=>`<li>${esc(h)}</li>`).join('')}</ul></div>`;
+  Object.entries(data.phases||{}).forEach(([phase, commands])=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-play-circle"></i> ${esc(phase)}</div>
+      <pre style="background:var(--bg);padding:12px;border-radius:6px;color:var(--teal);font-size:.82em;margin-top:8px;overflow-x:auto">${(commands||[]).map(c=>esc(c)).join('\n')}</pre></div>`;
+  });
+  out.innerHTML = html;
+}
+
+async function smChecklist(){
+  const out = document.getElementById('sm-cl-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/smart-meter/checklist',{});
+  let html = '';
+  Object.entries(data.categories||{}).forEach(([cat, items])=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-clipboard-check"></i> ${esc(cat)}</div>
+      <table class="data-table" style="margin-top:8px"><tr><th style="width:30px">☐</th><th>Check</th><th>Severity</th></tr>
+      ${items.map(i=>`<tr><td>☐</td><td>${esc(i.check)}</td><td>${sb(i.severity)}</td></tr>`).join('')}
+      </table></div>`;
+  });
+  out.innerHTML = html;
+}
+
+async function smCompliance(){
+  const out = document.getElementById('sm-comp-out');
+  out.innerHTML='<div class="card"><span class="spinner"></span></div>';
+  const data = await apiPost('/api/smart-meter/compliance',{});
+  let html = '';
+  Object.entries(data.frameworks||{}).forEach(([framework, controls])=>{
+    html += `<div class="card"><div class="card-title"><i class="fas fa-gavel"></i> ${esc(framework)}</div>
+      <ul style="font-size:.85em;line-height:1.8;margin-top:8px;padding-left:20px">${controls.map(c=>`<li>${esc(c)}</li>`).join('')}</ul></div>`;
+  });
+  out.innerHTML = html;
+}
+</script>
+{% endblock %}
