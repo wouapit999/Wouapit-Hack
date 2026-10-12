@@ -568,18 +568,47 @@ async function buildReport(target) {
     });
   });
 
-  // Exposed directories
-  const sensitivePaths = ['.git','.env','.htaccess','phpinfo','wp-admin','phpmyadmin','admin','config','backup','server-status','actuator','debug'];
-  (r.dirs?.found||[]).forEach(f=>{
-    const p = f.url.split('/').pop().toLowerCase();
-    if (sensitivePaths.some(s=>p.includes(s)) || f.status===200) findings.push({
-      title:`Exposed Path: ${f.url.split('/').slice(-1)[0]}`,
-      severity: sensitivePaths.some(s=>p.includes(s))?'HIGH':'LOW',
-      description:`${f.url} returned HTTP ${f.status}.`,
-      location:f.url, cvss:'7.5', evidence:`HTTP ${f.status} — ${f.size}B`,
-      remediation:'Restrict access via auth or firewall. Remove sensitive files from web root.',
+  // Exposed directories — strict criteria, no WAF false positives
+  if (r.dirs?.bot_challenged) {
+    findings.push({
+      title:'Directory bruteforce aborted — WAF/bot challenge',
+      severity:'INFO',
+      description:'Vercel/Cloudflare bot protection intercepted the probe. No path findings are produced from this scan — all would be false positives.',
+      location:target, cvss:'N/A',
+      evidence: (r.dirs?.info || ['WAF interstitial detected']).join(' '),
+      remediation:'Re-run from a whitelisted IP, use lower request rate, or inspect manually.',
     });
-  });
+  } else {
+    const sensitivePaths = ['.git','.env','.htaccess','phpinfo','wp-admin','phpmyadmin','actuator','server-status'];
+    (r.dirs?.found||[]).forEach(f=>{
+      const p = f.url.split('/').pop().toLowerCase();
+      const isSensitive = sensitivePaths.some(s=>p.includes(s));
+      const isGenuine200 = f.status===200 && f.confidence==='HIGH' && f.verified;
+      // Only HIGH-confidence 200s on sensitive paths are real findings.
+      if (isSensitive && isGenuine200) {
+        findings.push({
+          title:`Exposed Sensitive Path: ${f.url.split('/').slice(-1)[0]}`,
+          severity:'HIGH', confidence:'HIGH',
+          description:`${f.url} returned HTTP 200 with content distinct from the soft-404 baseline — a sensitive path is publicly accessible.`,
+          location:f.url, cvss:'7.5',
+          evidence:`HTTP 200 — ${f.size}B (differs from baseline)`,
+          remediation:'Restrict access via auth or firewall. Remove sensitive files from web root.',
+        });
+      } else if (isGenuine200) {
+        // Non-sensitive but genuinely accessible — informational, not HIGH.
+        findings.push({
+          title:`Accessible Path: ${f.url.split('/').slice(-1)[0]}`,
+          severity:'INFO', confidence:'MEDIUM',
+          description:`${f.url} returned HTTP 200. Not inherently a vulnerability — review manually.`,
+          location:f.url, cvss:'0.0',
+          evidence:`HTTP 200 — ${f.size}B`,
+          remediation:'Verify whether this path should be publicly accessible.',
+        });
+      }
+      // 401/403/3xx findings are suppressed entirely — endpoint existence disclosure
+      // is not a finding worth paging an engineer about.
+    });
+  }
 
   if (findings.length === 0) findings.push({
     title:'No Vulnerabilities Detected', severity:'INFO',

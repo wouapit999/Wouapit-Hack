@@ -84,9 +84,33 @@ def _req(url, **kwargs):
 
 # ─── False-positive prevention helpers ──────────────────────────────────────
 
+def _is_waf_challenge(response) -> bool:
+    """Detect Vercel / Cloudflare / generic WAF challenge interstitial.
+    If present, the scanner is NOT seeing the real target — do not report findings."""
+    try:
+        h = response.headers
+        if h.get("X-Vercel-Mitigated", "").lower() == "challenge":
+            return True
+        if "X-Vercel-Challenge-Token" in h:
+            return True
+        if "cf-mitigated" in {k.lower() for k in h}:
+            return True
+        if response.status_code == 403 and h.get("Server", "").lower() == "cloudflare":
+            return True
+        body_sample = response.text[:3000].lower()
+        if response.status_code in (403, 429) and any(s in body_sample for s in [
+            "checking your browser", "security checkpoint", "attention required",
+            "ray id", "ddos protection", "cf-browser-verification",
+        ]):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _fetch_baseline(url: str, session=None):
-    """Fetch a known-random-nonexistent path to detect soft-404 / SPA behavior.
-    Returns dict {status, size, hash, text_lower, url}."""
+    """Fetch a known-random-nonexistent path to detect soft-404 / SPA behavior
+    AND WAF/bot-challenge interception. Returns dict with bot_challenged flag."""
     import hashlib, secrets
     if not REQUESTS_AVAILABLE:
         return None
@@ -101,11 +125,12 @@ def _fetch_baseline(url: str, session=None):
         r = s.get(probe_url, timeout=6, verify=False, allow_redirects=False)
         body = r.text[:8000]
         return {
-            "status":     r.status_code,
-            "size":       len(r.content),
-            "hash":       hashlib.md5(body.encode(errors="ignore")).hexdigest(),
-            "text_lower": body.lower(),
-            "url":        probe_url,
+            "status":         r.status_code,
+            "size":           len(r.content),
+            "hash":           hashlib.md5(body.encode(errors="ignore")).hexdigest(),
+            "text_lower":     body.lower(),
+            "url":            probe_url,
+            "bot_challenged": _is_waf_challenge(r),
         }
     except Exception:
         return None
@@ -175,20 +200,50 @@ def dir_bruteforce(base_url: str, wordlist_key: str = "common") -> dict:
     baseline = _fetch_baseline(base_url, session)
     if baseline:
         result["baseline"] = {
-            "probe_path": baseline["url"],
-            "status":     baseline["status"],
-            "size":       baseline["size"],
+            "probe_path":     baseline["url"],
+            "status":         baseline["status"],
+            "size":           baseline["size"],
+            "bot_challenged": baseline.get("bot_challenged", False),
         }
+        # If the very first baseline probe hits a WAF challenge, abort entirely.
+        # Every subsequent response will be the challenge page, not the real target.
+        if baseline.get("bot_challenged"):
+            result["bot_challenged"] = True
+            result["info"].append(
+                "ABORTED: Target returned a WAF / bot-challenge (Vercel Security Checkpoint, "
+                "Cloudflare, or similar) on the baseline probe. Every subsequent request would "
+                "receive the challenge page, not the real app — no findings can be assessed. "
+                "Scan from a whitelisted IP, authenticated session, or lower request rate."
+            )
+            result["count"]   = 0
+            result["scanned"] = 0
+            return result
         if baseline["status"] == 200:
             result["info"].append(
                 f"SPA/soft-404 detected: random path returned 200 with {baseline['size']} bytes. "
                 "Only paths returning genuinely different content are reported."
             )
 
+    # Track WAF-challenge responses mid-scan — stop as soon as we hit one
+    waf_hits = 0
     for word in words:
         url = f"{base_url}/{word}"
         try:
             r = session.get(url, timeout=5, allow_redirects=False)
+            # Mid-scan WAF detection: once Vercel starts challenging, every
+            # subsequent response is bogus. Abort cleanly.
+            if _is_waf_challenge(r):
+                waf_hits += 1
+                if waf_hits >= 3:
+                    result["bot_challenged"] = True
+                    result["info"].append(
+                        f"ABORTED mid-scan: WAF challenge after {len(result['found'])} candidates. "
+                        "Rate-limited by target's bot protection. Results so far may contain false "
+                        "positives from earlier challenge responses — discarding them."
+                    )
+                    result["found"] = []  # discard — any 'found' before this is suspect
+                    break
+                continue
             if r.status_code in (404, 400):
                 continue
             if _is_soft_404(r, baseline):
@@ -196,11 +251,17 @@ def dir_bruteforce(base_url: str, wordlist_key: str = "common") -> dict:
             body_hash = hashlib.md5(r.text[:8000].encode(errors="ignore")).hexdigest()
             if baseline and body_hash == baseline["hash"]:
                 continue
-            confidence = "HIGH"
-            if r.status_code in (301, 302, 303, 307, 308):
-                confidence = "MEDIUM"
-            if r.status_code in (401, 403):
+            # Confidence: ONLY HTTP 200 with content materially different from
+            # the soft-404 baseline is a real "exposed" finding. Everything else
+            # (redirects, auth prompts) means the server routed the request but
+            # the resource may not exist as the attacker hopes.
+            confidence = "LOW"
+            if r.status_code == 200:
                 confidence = "HIGH"
+            elif r.status_code in (401, 403):
+                confidence = "MEDIUM"   # endpoint exists but is protected
+            elif r.status_code in (301, 302, 303, 307, 308):
+                confidence = "LOW"      # redirect — likely to login/home
             result["found"].append({
                 "url":        url,
                 "status":     r.status_code,
