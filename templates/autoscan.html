@@ -504,19 +504,78 @@ async function buildReport(target) {
   const r        = scanResults;
   const findings = [];
 
-  const addVulns = (key) => {
-    (r[key]?.vulnerabilities || []).forEach(v => findings.push({
-      title:       v.type || key,
-      severity:    v.severity || 'MEDIUM',
-      description: v.evidence || v.type || '',
-      location:    v.url || target,
-      cvss:        ({CRITICAL:'9.8',HIGH:'7.5',MEDIUM:'5.3',LOW:'3.1',INFO:'0.0'})[v.severity] || '5.0',
-      evidence:    v.evidence || v.payload || v.indicator || '',
-      remediation: v.remediation || 'Review and remediate this vulnerability.',
-    }));
+  // Severity cap for heuristic / unverified checks — rating these HIGH without
+  // proof produces noise reports that security teams can't trust.
+  const HEURISTIC_SEVERITY_CAP = {
+    'Potential CSRF Vulnerability': { severity: 'MEDIUM', cvss: '5.3' },
+    'Clickjacking':                 { severity: 'MEDIUM', cvss: '5.3' },
+    'CORS Misconfiguration':        { severity: 'MEDIUM', cvss: '5.3' },
+    'Open Redirect':                { severity: 'MEDIUM', cvss: '5.3' },
+    'Insecure Cookie':              { severity: 'LOW',    cvss: '3.1' },
   };
 
-  // Structured findings from vuln tools
+  // Collect per-scanner vulns, DEDUPE by type, roll multiple vectors into
+  // ONE finding with evidence listing all observations.
+  const addVulns = (key) => {
+    const vulns = r[key]?.vulnerabilities || [];
+    if (!vulns.length) return;
+    const byType = {};
+    vulns.forEach(v => {
+      const t = v.type || key;
+      (byType[t] = byType[t] || []).push(v);
+    });
+    Object.entries(byType).forEach(([vulnType, group]) => {
+      const first = group[0];
+      // Build concrete evidence from ALL group members
+      const evidenceLines = group.map(v => {
+        const parts = [];
+        if (v.origin_tested)       parts.push(`origin: ${v.origin_tested}`);
+        if (v.acao_header)         parts.push(`ACAO: ${v.acao_header}`);
+        if (v.credentials_allowed) parts.push(`credentials: ${v.credentials_allowed}`);
+        if (v.parameter)           parts.push(`param: ${v.parameter}`);
+        if (v.payload)             parts.push(`payload: ${String(v.payload).slice(0,60)}`);
+        if (v.indicator)           parts.push(`indicator: ${v.indicator}`);
+        if (v.evidence && !parts.length) parts.push(v.evidence);
+        return parts.join(' · ');
+      }).filter(Boolean);
+
+      // Severity: cap heuristic findings unless scanner marked them verified
+      let severity = first.severity || 'MEDIUM';
+      let cvss = ({CRITICAL:'9.8',HIGH:'7.5',MEDIUM:'5.3',LOW:'3.1',INFO:'0.0'})[severity] || '5.0';
+      // Match any key that is a prefix of vulnType (e.g. "Dangerous HTTP Method: PUT")
+      const capKey = Object.keys(HEURISTIC_SEVERITY_CAP).find(k => vulnType.startsWith(k));
+      const cap = capKey ? HEURISTIC_SEVERITY_CAP[capKey] : null;
+      if (cap && !first.verified) {
+        severity = cap.severity;
+        cvss = cap.cvss;
+      }
+
+      const title = group.length > 1
+        ? `${vulnType} (${group.length} vectors tested)`
+        : vulnType;
+      const evidence = evidenceLines.length
+        ? `${group.length} observation(s):\n  • ${evidenceLines.join('\n  • ')}`
+        : (first.evidence || first.payload || first.indicator || 'See scanner output');
+
+      findings.push({
+        title,
+        severity,
+        confidence: first.confidence || (first.verified ? 'HIGH' : 'MEDIUM'),
+        verified:   !!first.verified,
+        description: first.description || first.evidence || vulnType,
+        location: first.url || target,
+        cvss,
+        evidence,
+        remediation: (first.remediation || 'Review and remediate this vulnerability.')
+          + (first.verified ? '' :
+             '\n\nVERIFICATION REQUIRED: this is a heuristic finding, not a verified exploit. '
+             + 'Before remediating, confirm manually — the finding may be a false positive if '
+             + 'the app uses SameSite cookies, fetch() with CSRF headers, or framework-level '
+             + 'CORS defaults rather than classic HTML forms.'),
+      });
+    });
+  };
+
   ['sqli','xss','lfi','ssti','ssrf','cmd','cors','redir','methods','click','csrf','cookies'].forEach(addVulns);
 
   // SSL findings

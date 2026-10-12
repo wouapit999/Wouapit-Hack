@@ -1092,17 +1092,26 @@ def csrf_check(url: str) -> dict:
             return result
 
         if state_changing_forms and not found_token and not samesite_ok and not csrf_headers:
+            # Severity MEDIUM (not HIGH): the scanner only observed the form,
+            # not an end-to-end exploit chain. Real CSRF needs an authenticated
+            # session + predictable endpoint + attacker-crafted trigger page.
             result["vulnerabilities"].append({
                 "type":       "Potential CSRF Vulnerability",
-                "severity":   "HIGH",
-                "evidence":   f"{len(state_changing_forms)} state-changing form(s), no CSRF token, no SameSite cookies, no CSRF headers",
-                "confidence": "MEDIUM",
-                "verified":   True,
+                "severity":   "MEDIUM",
+                "evidence":   f"{len(state_changing_forms)} state-changing <form> element(s) with method=POST/PUT/DELETE. "
+                              f"No CSRF token found in HTML body. No SameSite=Strict/Lax cookies observed. "
+                              f"No X-CSRF-Token / X-XSRF-Token response headers.",
+                "confidence": "LOW",
+                "verified":   False,
                 "reproduce":  f"View source of '{url}' and inspect <form method='POST'> elements",
-                "remediation":"Implement synchroniser token pattern on all state-changing forms.",
+                "remediation":"If this is a traditional HTML-form app: implement the synchroniser-token pattern. "
+                              "If this is a SPA using fetch()/XHR with authenticated session cookies: add "
+                              "SameSite=Lax (or Strict) to the session cookie — this neutralises CSRF for "
+                              "modern browsers without needing per-form tokens.",
             })
         else:
-            result["info"]["note"] = "CSRF protections detected (token, SameSite, or custom header)."
+            result["info"]["note"] = ("No CSRF-prone surface detected: either no state-changing forms, or "
+                                      "CSRF protections present (token, SameSite cookie, or custom header).")
     except Exception as e:
         result["error"] = str(e)
     return result
